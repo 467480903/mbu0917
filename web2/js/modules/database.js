@@ -1,0 +1,20 @@
+export default {
+  key: 'db', title: '数据库', description: '关节、位姿、地图点位的增删改查与执行',
+  commands: [
+    { cmd: 'getJoints', label: '查询关节数据', payload: {} },
+    { cmd: 'addJoint', label: '新增关节数据', payload: { type: 'head', name: 'web2_test', value: {} } },
+    { cmd: 'updateJoint', label: '更新关节数据', payload: { type: 'head', name: 'web2_test', value: {} } },
+    { cmd: 'deleteJoint', label: '删除关节数据', payload: { type: 'head', name: 'web2_test' } },
+    { cmd: 'moveJoint', label: '执行关节数据', motion: true, payload: { name: 'web2_test', speed: 0.2 } },
+    { cmd: 'getPositions', label: '查询位姿数据', payload: {} },
+    { cmd: 'addPosition', label: '新增位姿数据', payload: { type: 'left', name: 'web2_test', value: {} } },
+    { cmd: 'updatePosition', label: '更新位姿数据', payload: { type: 'left', name: 'web2_test', value: {} } },
+    { cmd: 'deletePosition', label: '删除位姿数据', payload: { type: 'left', name: 'web2_test' } },
+    { cmd: 'movePosition', label: '执行位姿数据', motion: true, payload: { name: 'web2_test' } },
+    { cmd: 'getMapPoints', label: '查询地图点位', payload: {} },
+    { cmd: 'addMapPoint', label: '新增地图点位', payload: { name: 'web2_test', position: [0, 0, 0], orientation: [0, 0, 0, 1], source: 'local' } },
+    { cmd: 'updateMapPoint', label: '更新地图点位', payload: { name: 'web2_test', position: [0, 0, 0], orientation: [0, 0, 0, 1] } },
+    { cmd: 'deleteMapPoint', label: '删除地图点位', payload: { name: 'web2_test' } },
+    { cmd: 'moveMapPoint', label: '执行地图点位', motion: true, payload: { name: 'web2_test' } },
+  ],
+};

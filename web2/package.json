@@ -1,0 +1,9 @@
+{
+  "name": "g2-web2",
+  "version": "1.0.0",
+  "private": true,
+  "description": "G2 机器人模块化 MQTT Web 控制台",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

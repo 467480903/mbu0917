@@ -19,6 +19,7 @@
 //   /humanoid/programs/step       服务端发布执行步骤
 //   /humanoid/programs/codes      服务端发布代码内容
 //   /humanoid/programs/files      服务端发布文件列表
+//   /humanoid/programs/status     服务端发布运行、完成、停止或错误状态
 //   /humanoid/programs/file_content  服务端发布指定文件内容
 //   /humanoid/programs/upload_result  服务端发布上传结果
 //   /humanoid/programs/delete_result  服务端发布删除结果
@@ -40,6 +41,7 @@ const POSITIONS_DATA_TOPIC = '/humanoid/positions/data';
 const PROGRAMS_STEP_TOPIC = '/humanoid/programs/step';
 const PROGRAMS_CODES_TOPIC = '/humanoid/programs/codes';
 const PROGRAMS_FILES_TOPIC = '/humanoid/programs/files';
+const PROGRAMS_STATUS_TOPIC = '/humanoid/programs/status';
 const PROGRAMS_FILE_CONTENT_TOPIC = '/humanoid/programs/file_content';
 const PROGRAMS_UPLOAD_RESULT_TOPIC = '/humanoid/programs/upload_result';
 const PROGRAMS_DELETE_RESULT_TOPIC = '/humanoid/programs/delete_result';
@@ -71,6 +73,7 @@ class MqttClient {
         this.runtimeStepCallbacks = [];
         this.runtimeCodesCallbacks = [];
         this.runtimeProgramFilesCallbacks = [];
+        this.runtimeStatusCallbacks = [];
         this.runtimeFileContentCallbacks = [];
         this.runtimeUploadResultCallbacks = [];
         this.runtimeDeleteResultCallbacks = [];
@@ -118,6 +121,8 @@ class MqttClient {
                     this.runtimeCodesCallbacks.forEach(cb => cb(data));
                 } else if (message.destinationName === PROGRAMS_FILES_TOPIC) {
                     this.runtimeProgramFilesCallbacks.forEach(cb => cb(data));
+                } else if (message.destinationName === PROGRAMS_STATUS_TOPIC) {
+                    this.runtimeStatusCallbacks.forEach(cb => cb(data));
                 } else if (message.destinationName === PROGRAMS_FILE_CONTENT_TOPIC) {
                     this.runtimeFileContentCallbacks.forEach(cb => cb(data));
                 } else if (message.destinationName === PROGRAMS_UPLOAD_RESULT_TOPIC) {
@@ -156,6 +161,7 @@ class MqttClient {
                 this.client.subscribe(PROGRAMS_STEP_TOPIC, { qos: 0 });
                 this.client.subscribe(PROGRAMS_CODES_TOPIC, { qos: 0 });
                 this.client.subscribe(PROGRAMS_FILES_TOPIC, { qos: 0 });
+                this.client.subscribe(PROGRAMS_STATUS_TOPIC, { qos: 0 });
                 this.client.subscribe(PROGRAMS_FILE_CONTENT_TOPIC, { qos: 0 });
                 this.client.subscribe(PROGRAMS_UPLOAD_RESULT_TOPIC, { qos: 0 });
                 this.client.subscribe(PROGRAMS_DELETE_RESULT_TOPIC, { qos: 0 });
@@ -268,6 +274,17 @@ class MqttClient {
 
     removeRuntimeProgramFilesCallback(callback) {
         this.runtimeProgramFilesCallbacks = this.runtimeProgramFilesCallbacks.filter(cb => cb !== callback);
+    }
+
+    /** 注册程序运行状态回调。 */
+    addRuntimeStatusCallback(callback) {
+        if (!this.runtimeStatusCallbacks.includes(callback)) {
+            this.runtimeStatusCallbacks.push(callback);
+        }
+    }
+
+    removeRuntimeStatusCallback(callback) {
+        this.runtimeStatusCallbacks = this.runtimeStatusCallbacks.filter(cb => cb !== callback);
     }
 
     /**

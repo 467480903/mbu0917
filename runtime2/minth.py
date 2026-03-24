@@ -69,6 +69,7 @@ class G2:
         self._response = None
         self._last_timestamp = 0
         self._timestamp_lock = threading.Lock()
+        self._pending_base_motion = None
 
         if mqtt_client is None:
             if mqtt is None:
@@ -195,6 +196,47 @@ class G2:
         payload = {"cmd": "point", "name": str(点位序号)}
         return self._wait_motion_done(self.BASE_REQUEST, payload, "base", timeout)
 
+    def 底盘到点运动不等待(self, 点位序号, timeout=None):
+        """启动地图点位导航，确认命令已下发后立即返回。"""
+        if self._pending_base_motion is not None:
+            raise G2Error("已有未等待完成的底盘到点运动，请先调用 等待底盘运动结束()")
+
+        name = str(点位序号)
+        payload = {"cmd": "point_no_wait", "name": name}
+        self._publish_and_wait(
+            self.BASE_REQUEST, payload, {self.DONE}, "point_no_wait",
+            "base", timeout=timeout,
+        )
+        self._pending_base_motion = {"name": name, "time": payload["time"]}
+        return True
+
+    def 等待底盘运动结束(self, timeout=None):
+        """等待此前由 ``底盘到点运动不等待`` 启动的导航任务结束。"""
+        if self._pending_base_motion is None:
+            raise G2Error("当前没有需要等待的底盘到点运动")
+
+        wait_timeout = self.timeout if timeout is None else self._validate_number("等待超时", timeout)
+        if wait_timeout <= 0:
+            raise ValueError("等待超时必须大于 0")
+        payload = {
+            "cmd": "wait_motion",
+            "name": self._pending_base_motion["name"],
+            "source_time": self._pending_base_motion["time"],
+            "timeout": wait_timeout,
+        }
+        try:
+            self._publish_and_wait(
+                self.BASE_REQUEST, payload, {self.DONE}, "wait_motion",
+                "base", timeout=wait_timeout + 5.0,
+            )
+        except (MqttPublishError, ResponseTimeoutError):
+            raise
+        except G2Error:
+            self._pending_base_motion = None
+            raise
+        self._pending_base_motion = None
+        return True
+
     def 底盘相对运动带速度(self, 前后, 左右, 转角, 线速度, 角速度, timeout=None):
         payload = {"cmd": "relative2", "x": self._validate_number("前后", 前后),
                    "y": self._validate_number("左右", 左右), "rotate": self._validate_number("转角", 转角),
@@ -244,8 +286,10 @@ class G2:
         return True
 
     def _database_motion(self, command, name, speed=None, linear_speed=None,
-                         angular_speed=None, timeout=None):
+                         angular_speed=None, variable_type=None, timeout=None):
         payload = {"cmd": command, "name": str(name)}
+        if variable_type is not None:
+            payload["type"] = str(variable_type)
         if speed is not None:
             payload["speed"] = self._validate_number("角速度", speed)
         if linear_speed is not None:
@@ -257,13 +301,25 @@ class G2:
         return True
 
     def 全身关节运动(self, 关节变量, 角速度=None, timeout=None):
-        return self._database_motion("moveJoint", 关节变量, speed=角速度, timeout=timeout)
+        return self._database_motion(
+            "moveJoint", 关节变量, speed=角速度,
+            variable_type="whole_body", timeout=timeout)
 
     def 左手关节运动(self, 左手关节变量, 角速度=None, timeout=None):
-        return self._database_motion("moveJoint", 左手关节变量, speed=角速度, timeout=timeout)
+        return self._database_motion(
+            "moveJoint", 左手关节变量, speed=角速度,
+            variable_type="left_arm", timeout=timeout)
 
     def 右手关节运动(self, 右手关节变量, 角速度=None, timeout=None):
-        return self._database_motion("moveJoint", 右手关节变量, speed=角速度, timeout=timeout)
+        return self._database_motion(
+            "moveJoint", 右手关节变量, speed=角速度,
+            variable_type="right_arm", timeout=timeout)
+
+    def 单关节变量运动(self, 单关节变量, 角速度=None, timeout=None):
+        """运动到数据库中保存的单关节变量。"""
+        return self._database_motion(
+            "moveJoint", 单关节变量, speed=角速度,
+            variable_type="single_joint", timeout=timeout)
 
     def 左手坐标姿态运动(self, 左手坐标姿态变量, 末端线速度=None, 末端角速度=None, timeout=None):
         return self._database_motion("movePosition", 左手坐标姿态变量,

@@ -1,5 +1,5 @@
 // program-view.js
-// 程序视图：显示 main.py 代码，支持读取代码、单步调试、高亮当前执行行
+// 程序视图：显示 main.py 代码，支持运行、断点调试和高亮当前执行行
 
 import { mqttClient } from './mqtt-client.js';
 
@@ -13,10 +13,18 @@ export default {
                 <div
                     v-for="(line, idx) in codeLines"
                     :key="idx"
-                    :class="['code-line', { 'code-line-active': idx + 1 === currentLine }]"
+                    :class="['code-line', {
+                        'code-line-active': idx + 1 === currentLine,
+                        'code-line-breakpoint': hasBreakpoint(idx + 1)
+                    }]"
                     :ref="idx + 1 === currentLine ? 'activeLine' : null"
                 >
-                    <span class="line-num">{{ idx + 1 }}</span>
+                    <button
+                        type="button"
+                        :class="['line-num', { 'line-num-breakpoint': hasBreakpoint(idx + 1) }]"
+                        :title="hasBreakpoint(idx + 1) ? '点击取消断点' : '点击设置断点'"
+                        @click.stop="toggleBreakpoint(idx + 1)"
+                    >{{ idx + 1 }}</button>
                     <span class="line-content">{{ line || ' ' }}</span>
                 </div>
             </div>
@@ -34,27 +42,45 @@ export default {
                 <button class="program-btn file-btn" @click="openFileList"><ui-icon name="folder"></ui-icon>文件</button>
                 <button
                     class="program-btn run-btn"
-                    :class="{ active: running }"
+                    :class="{ active: running && !breakpointPaused }"
+                    :disabled="running && !breakpointPaused"
                     @click="runProgram">
                     <ui-icon name="play"></ui-icon>
-                    {{ running ? '运行中...' : '运行' }}
+                    {{ running && !breakpointPaused ? '运行中...' : '运行' }}
                 </button>
                 <button
-                    class="program-btn debug-btn"
-                    :class="{ active: debugging }"
-                    @click="startDebug">
-                    <ui-icon name="bug"></ui-icon>
-                    {{ debugging ? '调试中...' : '单步调试' }}
+                    class="program-btn pause-btn"
+                    :class="{ active: paused || pausePending }"
+                    :disabled="!running || paused || pausePending || breakpointPaused"
+                    @click="pauseProgram">
+                    <ui-icon name="pause"></ui-icon>
+                    暂停
                 </button>
+                <button
+                    class="program-btn resume-btn"
+                    :disabled="!running || breakpointPaused || (!paused && !pausePending)"
+                    @click="resumeProgram">
+                    <ui-icon name="play"></ui-icon>
+                    恢复
+                </button>
+                <label
+                    class="program-debug-toggle"
+                    :class="{ active: debugEnabled, disabled: running }"
+                    title="启用后，运行到断点时暂停">
+                    <input type="checkbox" v-model="debugEnabled" :disabled="running" />
+                    <ui-icon name="bug"></ui-icon>
+                    <span>调试</span>
+                </label>
                 <button
                     class="program-btn next-btn"
-                    :disabled="!debugging"
+                    :disabled="!debugEnabled || !breakpointPaused"
                     @click="nextLine">
                     <ui-icon name="next"></ui-icon>
                     下一行
                 </button>
                 <button
                     class="program-btn stop-btn"
+                    :disabled="!running"
                     @click="stopProgram">
                     <ui-icon name="stop"></ui-icon>
                     停止程序
@@ -91,25 +117,56 @@ export default {
 
                 <!-- 底部按钮栏 -->
                 <div class="dialog-btn-bar dialog-btn-bar-noflexwrap">
-                    <button class="nav-btn dialog-btn" @click="triggerFileSelect" :disabled="uploading" style="background:#2196F3; color:#fff;">
+                    <button class="nav-btn dialog-btn" @click="openCreateDialog" style="background:#00499d; color:#fff;">
+                        <ui-icon name="plus"></ui-icon>新建
+                    </button>
+                    <button class="nav-btn dialog-btn" @click="triggerFileSelect" :disabled="uploading" style="background:#00499d; color:#fff;">
                         <ui-icon name="upload"></ui-icon>
                         {{ uploading ? '上传中...' : '上传' }}
                     </button>
-                    <button class="nav-btn dialog-btn" @click="openFile" :disabled="!selectedFile" style="background:#4CAF50; color:#fff;">
-                        <ui-icon name="folder-open"></ui-icon>打开
+                    <button class="nav-btn dialog-btn" @click="openFile" :disabled="!selectedFile || openingFile || running" style="background:#00499d; color:#fff;">
+                        <ui-icon name="folder-open"></ui-icon>{{ openingFile ? '打开中...' : '打开' }}
                     </button>
-                    <button class="nav-btn dialog-btn" @click="openEditFile" :disabled="!selectedFile || editingFile" style="background:#9C27B0; color:#fff;">
+                    <button class="nav-btn dialog-btn" @click="openEditFile" :disabled="!selectedFile || editingFile" style="background:#00499d; color:#fff;">
                         <ui-icon name="edit"></ui-icon>
                         {{ editingFile ? '加载中...' : '修改' }}
                     </button>
-                    <button class="nav-btn dialog-btn" @click="downloadFile" :disabled="!selectedFile || downloading" style="background:#FF9800; color:#fff;">
+                    <button class="nav-btn dialog-btn" @click="downloadFile" :disabled="!selectedFile || downloading" style="background:#00499d; color:#fff;">
                         <ui-icon name="download"></ui-icon>
                         {{ downloading ? '下载中...' : '下载' }}
                     </button>
-                    <button class="nav-btn dialog-btn" @click="deleteFile" :disabled="!selectedFile || selectedFile === 'main.py'" style="background:#f44336; color:#fff;">
+                    <button class="nav-btn dialog-btn" @click="deleteFile" :disabled="!selectedFile || selectedFile === 'main.py'" style="background:#00499d; color:#fff;">
                         <ui-icon name="trash"></ui-icon>删除
                     </button>
                     <button class="nav-btn dialog-btn" @click="closeFileList"><ui-icon name="x"></ui-icon>关闭</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 新建文件弹窗 -->
+        <div v-if="showCreateDialog" class="save-overlay" @click.self="closeCreateDialog">
+            <div class="save-dialog save-dialog-create">
+                <h6 class="pv-dialog-title">新建程序文件</h6>
+                <label class="pv-create-label" for="pv-create-name">文件名</label>
+                <input
+                    id="pv-create-name"
+                    ref="createNameInput"
+                    v-model.trim="createFileName"
+                    class="pv-create-input"
+                    type="text"
+                    autocomplete="off"
+                    spellcheck="false"
+                    placeholder="例如：my_program.py"
+                    @keyup.enter="createFile"
+                />
+                <div class="pv-create-hint">未填写 .py 后缀时会自动补全；不能覆盖已有文件。</div>
+                <div v-if="createMsg" :style="{color: createMsgColor, fontSize:'13px', marginTop:'8px', minHeight:'18px'}">{{ createMsg }}</div>
+                <div class="dialog-btn-bar dialog-btn-bar-noflexwrap" style="justify-content:flex-end;">
+                    <button class="nav-btn dialog-btn" @click="closeCreateDialog" :disabled="creating"><ui-icon name="x"></ui-icon>取消</button>
+                    <button class="nav-btn dialog-btn" @click="createFile" :disabled="creating" style="background:#00499d; color:#fff;">
+                        <ui-icon name="plus"></ui-icon>
+                        {{ creating ? '创建中...' : '创建' }}
+                    </button>
                 </div>
             </div>
         </div>
@@ -128,7 +185,7 @@ export default {
                 <div v-if="editMsg" :style="{color: editMsgColor, fontSize:'13px', marginTop:'8px', minHeight:'18px'}">{{ editMsg }}</div>
                 <div class="dialog-btn-bar dialog-btn-bar-noflexwrap" style="justify-content:flex-end;">
                     <button class="nav-btn dialog-btn" @click="cancelEdit"><ui-icon name="x"></ui-icon>取消</button>
-                    <button class="nav-btn dialog-btn" @click="saveEdit" :disabled="editSaving" style="background:#4CAF50; color:#fff;">
+                    <button class="nav-btn dialog-btn" @click="saveEdit" :disabled="editSaving" style="background:#00499d; color:#fff;">
                         <ui-icon name="save"></ui-icon>
                         {{ editSaving ? '保存中...' : '保存' }}
                     </button>
@@ -138,7 +195,7 @@ export default {
         <!-- 确认弹窗 -->
         <div v-if="confirmDialog.visible" class="save-overlay" @click.self="cancelConfirm">
             <div class="save-dialog" style="width:360px;">
-                <h6 :style="{marginBottom:'16px', color: confirmDialog.type === 'run' ? '#4CAF50' : '#FF9800'}">
+                <h6 :style="{marginBottom:'16px', color: confirmDialog.type === 'run' ? '#00499d' : '#00499d'}">
                     {{ confirmDialog.title }}
                 </h6>
                 <div style="color:#ccc; margin-bottom:20px; line-height:1.6; white-space:pre-line;">{{ confirmDialog.message }}</div>
@@ -146,7 +203,7 @@ export default {
                     <button class="nav-btn" @click="cancelConfirm"><ui-icon name="x"></ui-icon>取消</button>
                     <button
                         class="nav-btn"
-                        :style="{background: confirmDialog.type === 'run' ? '#4CAF50' : '#FF9800', color:'#fff'}"
+                        :style="{background: confirmDialog.type === 'run' ? '#00499d' : '#00499d', color:'#fff'}"
                         @click="confirmAction">
                         <ui-icon name="check"></ui-icon>确定
                     </button>
@@ -159,8 +216,12 @@ export default {
         return {
             code: '// 点击「读取代码」加载程序',
             currentLine: 0,
-            debugging: false,
+            debugEnabled: false,
             running: false,
+            paused: false,
+            pausePending: false,
+            breakpointPaused: false,
+            breakpoints: [],
             showFileList: false,
             programFiles: [],
             selectedFile: '',
@@ -168,15 +229,22 @@ export default {
             confirmDialog: { visible: false, type: '', title: '', message: '', action: null },
             uploading: false,
             downloading: false,
+            openingFile: false,
+            pendingOpenFile: '',
             fileMsg: '',
-            fileMsgColor: '#4CAF50',
+            fileMsgColor: '#00499d',
+            showCreateDialog: false,
+            createFileName: '',
+            creating: false,
+            createMsg: '',
+            createMsgColor: '#00499d',
             showEditDialog: false,
             editFileName: '',
             editContent: '',
             editSaving: false,
             editingFile: false,
             editMsg: '',
-            editMsgColor: '#4CAF50'
+            editMsgColor: '#00499d'
         };
     },
     computed: {
@@ -198,6 +266,22 @@ export default {
             mqttClient.publishRuntimeDebug('codes');
             console.log('[程序] 已请求读取代码');
         },
+        hasBreakpoint(lineNumber) {
+            return this.breakpoints.includes(lineNumber);
+        },
+        toggleBreakpoint(lineNumber) {
+            const breakpoints = this.breakpoints.slice();
+            const index = breakpoints.indexOf(lineNumber);
+            if (index >= 0) {
+                breakpoints.splice(index, 1);
+            } else {
+                breakpoints.push(lineNumber);
+                breakpoints.sort((left, right) => left - right);
+            }
+            this.breakpoints = breakpoints;
+            mqttClient.publishProgramControl('set_breakpoints', { lines: breakpoints });
+            console.log('[程序] 已更新断点:', breakpoints);
+        },
         openFileList() {
             mqttClient.publishRuntimeDebug('read_files');
             this.showFileList = true;
@@ -212,13 +296,72 @@ export default {
         },
         showFileMsg(msg, isError = false) {
             this.fileMsg = msg;
-            this.fileMsgColor = isError ? '#f44336' : '#4CAF50';
+            this.fileMsgColor = isError ? '#00499d' : '#00499d';
             if (msg) {
                 setTimeout(() => { this.fileMsg = ''; }, 3000);
             }
         },
         triggerFileSelect() {
             this.$refs.fileInput.click();
+        },
+        openCreateDialog() {
+            this.createFileName = '';
+            this.createMsg = '';
+            this.creating = false;
+            this.showCreateDialog = true;
+            this.$nextTick(() => {
+                if (this.$refs.createNameInput) {
+                    this.$refs.createNameInput.focus();
+                }
+            });
+        },
+        closeCreateDialog() {
+            if (this.creating) return;
+            this.showCreateDialog = false;
+            this.createFileName = '';
+            this.createMsg = '';
+        },
+        showCreateMsg(msg, isError = false) {
+            this.createMsg = msg;
+            this.createMsgColor = isError ? '#00499d' : '#00499d';
+        },
+        createFile() {
+            if (this.creating) return;
+            let filename = this.createFileName.trim();
+            if (!filename) {
+                this.showCreateMsg('请输入文件名', true);
+                return;
+            }
+            if (!filename.toLowerCase().endsWith('.py')) {
+                filename += '.py';
+            }
+            if (this.programFiles.includes(filename)) {
+                this.showCreateMsg('文件已存在，不能覆盖: ' + filename, true);
+                return;
+            }
+
+            const content = [
+                '#!/usr/bin/env python3',
+                '"""G2 用户程序。"""',
+                '',
+                'from runtime2 import G2',
+                '',
+                '',
+                'with G2() as 机器人:',
+                '    pass',
+                ''
+            ].join('\n');
+            this.creating = true;
+            this.createMsg = '';
+            if (this._createTimer) clearTimeout(this._createTimer);
+            this._createTimer = setTimeout(() => {
+                if (this.creating) {
+                    this.creating = false;
+                    this.showCreateMsg('创建超时，请检查服务是否正常', true);
+                }
+            }, 10000);
+            mqttClient.publishProgramControl('create', { filename, content });
+            console.log('[程序] 已发送新建请求:', filename);
         },
         onFileSelected(event) {
             const file = event.target.files[0];
@@ -255,6 +398,24 @@ export default {
             event.target.value = '';
         },
         onUploadResult(data) {
+            if (data && data.command === 'create') {
+                this.creating = false;
+                if (this._createTimer) clearTimeout(this._createTimer);
+                if (data.success) {
+                    const filename = data.filename;
+                    this.showCreateDialog = false;
+                    this.createFileName = '';
+                    this.createMsg = '';
+                    this.selectedFile = filename;
+                    this.showFileMsg('已新建: ' + filename);
+                    console.log('[程序] 新建成功:', filename);
+                    this.openEditFile();
+                } else {
+                    this.showCreateMsg('新建失败: ' + (data.error || '未知错误'), true);
+                    console.error('[程序] 新建失败:', data.error);
+                }
+                return;
+            }
             this.uploading = false;
             this.editSaving = false;
             if (this._uploadTimer) clearTimeout(this._uploadTimer);
@@ -290,15 +451,15 @@ export default {
         },
         openFile() {
             if (!this.selectedFile) return;
-            mqttClient.publishRuntimeDebug('copy', this.selectedFile);
-            this.currentFileName = this.selectedFile;
-            this.showFileList = false;
-            this.selectedFile = '';
+            if (this.running) {
+                this.showFileMsg('程序正在运行，请先停止程序', true);
+                return;
+            }
+            this.openingFile = true;
+            this.pendingOpenFile = this.selectedFile;
             this.fileMsg = '';
-            console.log('[程序] 已复制', this.currentFileName, '→ main.py');
-            setTimeout(() => {
-                this.readCode();
-            }, 300);
+            mqttClient.publishRuntimeDebug('copy', this.pendingOpenFile);
+            console.log('[程序] 已请求打开', this.pendingOpenFile);
         },
         downloadFile() {
             if (!this.selectedFile) return;
@@ -365,7 +526,7 @@ export default {
         },
         showEditMsg(msg, isError = false) {
             this.editMsg = msg;
-            this.editMsgColor = isError ? '#f44336' : '#4CAF50';
+            this.editMsgColor = isError ? '#00499d' : '#00499d';
             if (msg) {
                 setTimeout(() => { this.editMsg = ''; }, 3000);
             }
@@ -413,6 +574,12 @@ export default {
             }
         },
         runProgram() {
+            if (this.breakpointPaused) {
+                this.breakpointPaused = false;
+                mqttClient.publishRuntimeDebug('run');
+                console.log('[程序] 从断点继续运行');
+                return;
+            }
             if (this.running) return;
             this.confirmDialog = {
                 visible: true,
@@ -424,31 +591,15 @@ export default {
         },
         _doRun() {
             this.running = true;
+            this.paused = false;
+            this.pausePending = false;
+            this.breakpointPaused = false;
             this.currentLine = 0;
-            mqttClient.publishRuntimeDebug('run');
-            console.log('[程序] 已启动运行');
+            mqttClient.publishRuntimeDebug('run', { debug: this.debugEnabled });
+            console.log('[程序] 已启动运行，调试:', this.debugEnabled);
             this._runTimer = setTimeout(() => {
                 this.running = false;
             }, 600000);
-        },
-        startDebug() {
-            if (this.debugging) return;
-            this.confirmDialog = {
-                visible: true,
-                type: 'debug',
-                title: '确认单步调试',
-                message: `即将开始单步调试「${this.currentFileName}」，每步需手动点击「下一行」。\n请确认开始调试吗？`,
-                action: () => this._doDebug()
-            };
-        },
-        _doDebug() {
-            this.debugging = true;
-            this.currentLine = 0;
-            mqttClient.publishRuntimeDebug('debug');
-            console.log('[程序] 已启动单步调试');
-            this._debugTimer = setTimeout(() => {
-                this.debugging = false;
-            }, 60000);
         },
         cancelConfirm() {
             this.confirmDialog.visible = false;
@@ -459,16 +610,29 @@ export default {
             if (act) act();
         },
         nextLine() {
-            if (!this.debugging) return;
+            if (!this.debugEnabled || !this.breakpointPaused) return;
+            this.breakpointPaused = false;
             mqttClient.publishRuntimeDebug('next');
-            console.log('[程序] 下一行');
+            console.log('[程序] 从断点执行下一行');
+        },
+        pauseProgram() {
+            if (!this.running || this.paused || this.pausePending || this.breakpointPaused) return;
+            this.pausePending = true;
+            mqttClient.publishRuntimeDebug('pause');
+            console.log('[程序] 已请求暂停');
+        },
+        resumeProgram() {
+            if (!this.running || this.breakpointPaused || (!this.paused && !this.pausePending)) return;
+            mqttClient.publishRuntimeDebug('resume');
+            console.log('[程序] 已请求恢复');
         },
         stopProgram() {
             mqttClient.publishRuntimeDebug('stop');
-            this.debugging = false;
             this.running = false;
+            this.paused = false;
+            this.pausePending = false;
+            this.breakpointPaused = false;
             this.currentLine = 0;
-            if (this._debugTimer) clearTimeout(this._debugTimer);
             if (this._runTimer) clearTimeout(this._runTimer);
             console.log('[程序] 已请求停止');
         },
@@ -490,32 +654,118 @@ export default {
                 console.log('[程序] 收到文件列表:', data.files);
             }
         },
-        scrollToActiveLine() {
-            const el = this.$refs.activeLine;
-            if (el && el.length > 0) {
-                el[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        onRuntimeStatus(data) {
+            if (!data) return;
+            const command = data.command;
+            const state = data.state;
+            const finished = ['completed', 'stopped', 'error'].includes(state);
+
+            if (Array.isArray(data.breakpoints)) {
+                this.breakpoints = data.breakpoints.slice().sort((left, right) => left - right);
             }
+            if (typeof data.debug_enabled === 'boolean') {
+                this.debugEnabled = data.debug_enabled;
+            }
+
+            if (command === 'copy') {
+                this.openingFile = false;
+                if (data.success && state === 'copied') {
+                    this.currentFileName = data.filename || this.pendingOpenFile;
+                    this.breakpoints = [];
+                    this.pendingOpenFile = '';
+                    this.closeFileList();
+                    this.readCode();
+                    console.log('[程序] 已打开', this.currentFileName);
+                } else {
+                    const error = data.error || '未知错误';
+                    this.showFileMsg('打开失败: ' + error, true);
+                    console.error('[程序] 打开失败:', error);
+                }
+                return;
+            }
+
+            if (command === 'status') {
+                this.running = ['running', 'paused', 'pause_requested', 'breakpoint_paused'].includes(state);
+                this.paused = state === 'paused';
+                this.pausePending = state === 'pause_requested';
+                this.breakpointPaused = state === 'breakpoint_paused';
+                if (data.lineno) this.currentLine = data.lineno;
+                console.log('[程序] 当前服务状态:', state);
+                return;
+            }
+
+            if (command === 'run') {
+                if (state === 'running') {
+                    this.running = true;
+                    this.paused = false;
+                    this.pausePending = false;
+                    this.breakpointPaused = false;
+                } else if (state === 'pause_requested') {
+                    this.running = true;
+                    this.pausePending = true;
+                } else if (state === 'paused') {
+                    this.running = true;
+                    this.paused = true;
+                    this.pausePending = false;
+                    this.breakpointPaused = false;
+                } else if (state === 'breakpoint_paused') {
+                    this.running = true;
+                    this.paused = false;
+                    this.pausePending = false;
+                    this.breakpointPaused = true;
+                    if (data.lineno) this.currentLine = data.lineno;
+                } else if (finished) {
+                    this.running = false;
+                    this.paused = false;
+                    this.pausePending = false;
+                    this.breakpointPaused = false;
+                    if (this._runTimer) clearTimeout(this._runTimer);
+                }
+            } else if (command === 'pause' && state === 'error') {
+                this.pausePending = false;
+            } else if (command === 'resume' && state === 'error') {
+                this.pausePending = false;
+            }
+
+            if (finished) {
+                console.log(`[程序] ${command} 已结束: ${state}`);
+            }
+        },
+        scrollToActiveLine() {
+            const codeBlock = this.$refs.codeBlock;
+            if (!codeBlock) return;
+
+            const activeLine = codeBlock.querySelector('.code-line-active');
+            if (!activeLine) return;
+
+            const targetTop = activeLine.offsetTop
+                - (codeBlock.clientHeight / 2)
+                + (activeLine.offsetHeight / 2);
+            codeBlock.scrollTop = Math.max(0, targetTop);
         }
     },
     mounted() {
         mqttClient.addRuntimeStepCallback(this.onStep);
         mqttClient.addRuntimeCodesCallback(this.onCodes);
         mqttClient.addRuntimeProgramFilesCallback(this.onProgramFiles);
+        mqttClient.addRuntimeStatusCallback(this.onRuntimeStatus);
         mqttClient.addRuntimeFileContentCallback(this.onFileContent);
         mqttClient.addRuntimeUploadResultCallback(this.onUploadResult);
         mqttClient.addRuntimeDeleteResultCallback(this.onDeleteResult);
+        mqttClient.publishRuntimeDebug('status');
         this.readCode();
     },
     beforeUnmount() {
         mqttClient.removeRuntimeStepCallback(this.onStep);
         mqttClient.removeRuntimeCodesCallback(this.onCodes);
         mqttClient.removeRuntimeProgramFilesCallback(this.onProgramFiles);
+        mqttClient.removeRuntimeStatusCallback(this.onRuntimeStatus);
         mqttClient.removeRuntimeFileContentCallback(this.onFileContent);
         mqttClient.removeRuntimeUploadResultCallback(this.onUploadResult);
         mqttClient.removeRuntimeDeleteResultCallback(this.onDeleteResult);
-        if (this._debugTimer) clearTimeout(this._debugTimer);
         if (this._runTimer) clearTimeout(this._runTimer);
         if (this._uploadTimer) clearTimeout(this._uploadTimer);
+        if (this._createTimer) clearTimeout(this._createTimer);
         if (this._editSaveTimer) clearTimeout(this._editSaveTimer);
     }
 };

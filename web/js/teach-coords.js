@@ -110,7 +110,7 @@ export default {
         <!-- 保存弹窗 -->
         <div v-if="showSaveDialog" class="save-overlay" @click.self="showSaveDialog = false">
             <div class="save-dialog">
-                <h6 style="color:#409eff; margin-bottom:16px;">保存末端位姿</h6>
+                <h6 style="color:#00499d; margin-bottom:16px;">保存末端位姿</h6>
 
                 <div class="form-row">
                     <label>名称</label>

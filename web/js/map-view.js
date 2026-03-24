@@ -152,13 +152,13 @@ export default {
             if (fn) fn.call(this);
         },
         confirmStartMapping() {
-            this._showConfirm('开始扫图', '确定要开始激光扫图建图吗？请确保机器人已在需要建图的区域。', '▶', '#67c23a', this.startMapping);
+            this._showConfirm('开始扫图', '确定要开始激光扫图建图吗？请确保机器人已在需要建图的区域。', '▶', '#00499d', this.startMapping);
         },
         confirmStopMapping() {
-            this._showConfirm('结束扫图', '确定要结束扫图并停止建图吗？建图将在保存后停止。', '■', '#f56c6c', this.stopMapping);
+            this._showConfirm('结束扫图', '确定要结束扫图并停止建图吗？建图将在保存后停止。', '■', '#00499d', this.stopMapping);
         },
         confirmSaveMap() {
-            this._showConfirm('保存地图', '确定要保存当前地图吗？地图将被写入机器人系统。', '💾', '#e6a23c', this.saveMap);
+            this._showConfirm('保存地图', '确定要保存当前地图吗？地图将被写入机器人系统。', '💾', '#00499d', this.saveMap);
         },
         startMapping() {
             mqttClient.publishMapControl('start_mapping');
@@ -202,13 +202,13 @@ export default {
             }
 
             // 坐标轴 - 蓝色
-            ctx.strokeStyle = '#409eff';
+            ctx.strokeStyle = '#00499d';
             ctx.lineWidth = 1;
             ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(c.width, cy); ctx.stroke();
             ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, c.height); ctx.stroke();
 
             // 绘制点云 - 深蓝色
-            ctx.fillStyle = '#409eff';
+            ctx.fillStyle = '#00499d';
             for (const p of this.points) {
                 const x = cx + (p.x - this.centerX) * scale;
                 const y = cy - (p.y - this.centerY) * scale;
@@ -218,13 +218,13 @@ export default {
             }
 
             // 机器人位置（中心）- 绿色
-            ctx.fillStyle = '#67c23a';
+            ctx.fillStyle = '#00499d';
             ctx.beginPath();
             ctx.arc(cx, cy, 5, 0, Math.PI * 2);
             ctx.fill();
 
             // 机器人朝向指示 - 绿色
-            ctx.strokeStyle = '#67c23a';
+            ctx.strokeStyle = '#00499d';
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.moveTo(cx, cy);

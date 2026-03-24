@@ -49,8 +49,14 @@ class RuntimeProgramManager:
         self._state_lock = threading.Lock()
         self._step_event = threading.Event()
         self._stop_event = threading.Event()
+        self._pause_event = threading.Event()
+        self._resume_event = threading.Event()
+        self._continue_event = threading.Event()
         self._running = False
         self._debugging = False
+        self._breakpoint_paused = False
+        self._step_pause_pending = False
+        self._breakpoints = set()
         self._worker = None
         self._source_lines = []
 
@@ -63,6 +69,33 @@ class RuntimeProgramManager:
     def debugging(self):
         with self._state_lock:
             return self._debugging
+
+    @property
+    def breakpoint_paused(self):
+        with self._state_lock:
+            return self._breakpoint_paused
+
+    def publish_state(self):
+        """发布当前真实运行状态，供新打开或刷新的网页恢复按钮状态。"""
+        with self._state_lock:
+            running = self._running
+            debugging = self._debugging
+            breakpoint_paused = self._breakpoint_paused
+            breakpoints = sorted(self._breakpoints)
+        if running and breakpoint_paused:
+            state = "breakpoint_paused"
+        elif running and self._pause_event.is_set():
+            state = "paused"
+        elif running:
+            state = "running"
+        else:
+            state = "idle"
+        self.publisher(STATUS_TOPIC, {
+            "command": "status", "state": state, "success": True,
+            "filename": "main.py", "breakpoints": breakpoints,
+            "debug_enabled": debugging,
+        })
+        return state
 
     def list_programs(self):
         """列出 runtime2 根目录中的用户 Python 程序。"""
@@ -106,6 +139,21 @@ class RuntimeProgramManager:
         })
         return code
 
+    def create_program(self, filename, content=""):
+        """排他创建用户程序，禁止覆盖任何已经存在的文件。"""
+        target = self._program_target(filename)
+        if not isinstance(content, str):
+            raise ValueError("程序内容必须是文本")
+        try:
+            with target.open("x", encoding="utf-8") as stream:
+                stream.write(content)
+        except FileExistsError as error:
+            raise FileExistsError(f"程序已存在: {target.name}") from error
+        self.publisher(UPLOAD_RESULT_TOPIC, {
+            "command": "create", "success": True, "filename": target.name,
+        })
+        return target
+
     def upload_program(self, filename, content):
         """新增或保存用户程序，使用同目录临时文件原子替换。"""
         target = self._program_target(filename)
@@ -147,6 +195,8 @@ class RuntimeProgramManager:
             stream.write(content)
             temporary_name = stream.name
         os.replace(temporary_name, self.main_file)
+        with self._state_lock:
+            self._breakpoints.clear()
         self.publisher(STATUS_TOPIC, {
             "command": "copy", "state": "copied", "success": True,
             "filename": filename,
@@ -167,7 +217,7 @@ class RuntimeProgramManager:
         return code
 
     def start(self, debug=False):
-        """在独立线程中启动 main.py；debug=True 时每行等待 next。"""
+        """在独立线程中启动 main.py；debug=True 时启用断点调试。"""
         with self._state_lock:
             if self._running:
                 raise RuntimeError("已有用户程序在运行")
@@ -175,9 +225,14 @@ class RuntimeProgramManager:
                 raise FileNotFoundError("runtime2/main.py 不存在，请先选择程序")
             self._running = True
             self._debugging = bool(debug)
+            self._breakpoint_paused = False
+            self._step_pause_pending = False
 
         self._stop_event.clear()
         self._step_event.clear()
+        self._pause_event.clear()
+        self._resume_event.clear()
+        self._continue_event.clear()
         self._worker = threading.Thread(
             target=self._execute,
             name="runtime2-debug" if debug else "runtime2-run",
@@ -187,8 +242,9 @@ class RuntimeProgramManager:
         return True
 
     def next_step(self):
-        if not self.debugging:
-            raise RuntimeError("当前不在单步调试状态")
+        with self._state_lock:
+            if not self._running or not self._debugging or not self._breakpoint_paused:
+                raise RuntimeError("当前程序未在调试断点处暂停")
         self._step_event.set()
 
     def stop(self):
@@ -196,13 +252,70 @@ class RuntimeProgramManager:
             raise RuntimeError("当前没有运行中的程序")
         self._stop_event.set()
         self._step_event.set()
+        self._pause_event.clear()
+        self._resume_event.set()
+        self._continue_event.set()
+
+    def set_breakpoints(self, lines):
+        """替换 main.py 的断点集合；只在启用调试的运行中生效。"""
+        if not isinstance(lines, list):
+            raise ValueError("断点行必须是行号数组")
+        normalized = set()
+        for line in lines:
+            if isinstance(line, bool) or not isinstance(line, int) or line <= 0:
+                raise ValueError(f"无效断点行号: {line}")
+            normalized.add(line)
+        with self._state_lock:
+            self._breakpoints = normalized
+            breakpoints = sorted(self._breakpoints)
+        self.publisher(STATUS_TOPIC, {
+            "command": "breakpoints", "state": "updated", "success": True,
+            "filename": "main.py", "breakpoints": breakpoints,
+        })
+        return breakpoints
+
+    def continue_from_breakpoint(self):
+        """从调试断点暂停状态继续运行到下一个断点。"""
+        with self._state_lock:
+            if not self._running:
+                raise RuntimeError("当前没有运行中的程序")
+            if not self._breakpoint_paused:
+                raise RuntimeError("当前程序未停在断点")
+        self._continue_event.set()
+
+    def pause(self):
+        """请求普通运行程序在下一条 Python 语句执行前暂停。"""
+        with self._state_lock:
+            if not self._running:
+                raise RuntimeError("当前没有运行中的程序")
+        if not self._pause_event.is_set():
+            self._resume_event.clear()
+            self._pause_event.set()
+        self.publisher(STATUS_TOPIC, {
+            "command": "run", "state": "pause_requested", "success": True,
+            "filename": "main.py",
+        })
+
+    def resume(self):
+        """取消暂停请求并恢复普通运行程序。"""
+        with self._state_lock:
+            if not self._running:
+                raise RuntimeError("当前没有运行中的程序")
+        if not self._pause_event.is_set():
+            raise RuntimeError("当前程序未暂停")
+        self._pause_event.clear()
+        self._resume_event.set()
+        self.publisher(STATUS_TOPIC, {
+            "command": "run", "state": "running", "success": True,
+            "filename": "main.py",
+        })
 
     def _execute(self):
-        command = "debug" if self.debugging else "run"
-        state = "debugging" if self.debugging else "running"
+        command = "run"
+        state = "running"
         self.publisher(STATUS_TOPIC, {
             "command": command, "state": state, "success": True,
-            "filename": "main.py",
+            "filename": "main.py", "debug_enabled": self.debugging,
         })
         try:
             self._source_lines = self.main_file.read_text(encoding="utf-8").splitlines()
@@ -238,7 +351,12 @@ class RuntimeProgramManager:
             with self._state_lock:
                 self._running = False
                 self._debugging = False
+                self._breakpoint_paused = False
+                self._step_pause_pending = False
+            self._pause_event.clear()
+            self._resume_event.set()
             self._step_event.set()
+            self._continue_event.set()
 
     def _trace_lines(self, frame, event, arg):
         if event != "line":
@@ -255,16 +373,56 @@ class RuntimeProgramManager:
         line_number = frame.f_lineno
         code = self._source_lines[line_number - 1] if 0 < line_number <= len(self._source_lines) else ""
         self.publisher(STEP_TOPIC, {
-            "command": "debug" if self.debugging else "run",
+            "command": "run",
             "filename": "main.py", "lineno": line_number,
-            "code": code, "waiting": self.debugging,
+            "code": code, "waiting": self.breakpoint_paused,
         })
 
-        if self.debugging:
+        with self._state_lock:
+            is_breakpoint = line_number in self._breakpoints
+            debug_enabled = self._debugging
+            step_pause_pending = self._step_pause_pending
+            if step_pause_pending:
+                self._step_pause_pending = False
+        if debug_enabled and (is_breakpoint or step_pause_pending):
+            self._continue_event.clear()
+            self._step_event.clear()
+            with self._state_lock:
+                self._breakpoint_paused = True
+                breakpoints = sorted(self._breakpoints)
+            self.publisher(STATUS_TOPIC, {
+                "command": "run", "state": "breakpoint_paused", "success": True,
+                "filename": "main.py", "lineno": line_number,
+                "breakpoints": breakpoints, "debug_enabled": True,
+                "pause_reason": "step" if step_pause_pending else "breakpoint",
+            })
+            step_requested = False
             while not self._stop_event.is_set():
-                if self._step_event.wait(0.2):
+                if self._step_event.wait(0.05):
                     self._step_event.clear()
+                    step_requested = True
                     break
+                if self._continue_event.wait(0.2):
+                    break
+            self._continue_event.clear()
+            with self._state_lock:
+                self._breakpoint_paused = False
+                self._step_pause_pending = step_requested
+            if self._stop_event.is_set():
+                raise StopExecution()
+            self.publisher(STATUS_TOPIC, {
+                "command": "run", "state": "running", "success": True,
+                "filename": "main.py", "debug_enabled": True,
+            })
+
+        if self._pause_event.is_set():
+            self.publisher(STATUS_TOPIC, {
+                "command": "run", "state": "paused", "success": True,
+                "filename": "main.py", "lineno": line_number,
+            })
+            while self._pause_event.is_set() and not self._stop_event.is_set():
+                self._resume_event.wait(0.2)
+            self._resume_event.clear()
             if self._stop_event.is_set():
                 raise StopExecution()
         return self._trace_lines
@@ -294,6 +452,7 @@ class RuntimeDebugService:
     def _publish_error(self, command, error, data=None):
         result_topic = {
             "read_file": FILE_CONTENT_TOPIC,
+            "create": UPLOAD_RESULT_TOPIC,
             "upload": UPLOAD_RESULT_TOPIC,
             "delete": DELETE_RESULT_TOPIC,
         }.get(command, STATUS_TOPIC)
@@ -334,6 +493,11 @@ class RuntimeDebugService:
         elif command == "read_file":
             filename = data.get("filename") if isinstance(data, dict) else data
             self.manager.read_program(filename)
+        elif command == "create":
+            if not isinstance(data, dict):
+                raise ValueError("create 命令缺少 filename 和 content")
+            self.manager.create_program(data.get("filename"), data.get("content", ""))
+            self.manager.publish_programs()
         elif command == "upload":
             if not isinstance(data, dict):
                 raise ValueError("upload 命令缺少 filename 和 content")
@@ -345,12 +509,24 @@ class RuntimeDebugService:
             self.manager.publish_programs()
         elif command == "codes":
             self.manager.publish_main()
+        elif command == "status":
+            self.manager.publish_state()
         elif command == "run":
-            self.manager.start(debug=False)
-        elif command == "debug":
-            self.manager.start(debug=True)
+            if self.manager.breakpoint_paused:
+                self.manager.continue_from_breakpoint()
+            else:
+                debug_enabled = bool(data.get("debug")) if isinstance(data, dict) else False
+                self.manager.start(debug=debug_enabled)
         elif command == "next":
             self.manager.next_step()
+        elif command == "pause":
+            self.manager.pause()
+        elif command == "resume":
+            self.manager.resume()
+        elif command == "set_breakpoints":
+            if not isinstance(data, dict):
+                raise ValueError("set_breakpoints 命令缺少 lines")
+            self.manager.set_breakpoints(data.get("lines"))
         elif command == "stop":
             self.manager.stop()
         else:

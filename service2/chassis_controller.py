@@ -57,6 +57,9 @@ class ChassisController:
         self._status_thread = None
         self._cloud_enabled = threading.Event()
         self._emergency_pressed = threading.Event()
+        self._battery_cache = {"soc": None, "batteries": []}
+        self._battery_last_read = 0.0
+        self._battery_interval = 5.0
         self._is_mapping = False
         self._chassis_mode = -1  # -1=未申请, 0=Ackermann, 1=蟹行
         
@@ -364,6 +367,7 @@ class ChassisController:
                 "loc_state": pose["loc_state"],
                 "loc_confidence": round(float(pose["loc_confidence"]), 4),
             },
+            "battery": self._get_cached_battery(),
         }
         self.mqtt_client.publish(
             self.status_topic, json.dumps(payload, ensure_ascii=False), qos=0)
@@ -437,6 +441,18 @@ class ChassisController:
             })
         soc = sum(item["soc"] for item in batteries) / len(batteries) if batteries else None
         return {"soc": round(soc, 1) if soc is not None else None, "batteries": batteries}
+
+    def _get_cached_battery(self):
+        """按较低频率刷新电量，避免高频状态发布阻塞 GDK 电源接口。"""
+        now = time.monotonic()
+        if now - self._battery_last_read < self._battery_interval:
+            return self._battery_cache
+        self._battery_last_read = now
+        try:
+            self._battery_cache = self.get_battery()
+        except Exception as error:
+            print(f"[底盘状态] 电量读取失败: {error}")
+        return self._battery_cache
 
     def get_map_snapshot(self):
         """一次读取页面展示所需的全部真实机器人地图数据。"""
@@ -622,6 +638,10 @@ class ChassisController:
     def point_move(self, point, timeout=120.0):
         if not self.point_move2(point):
             return False
+        return self._wait_navi_done(timeout)
+
+    def wait_navigation_done(self, timeout=120.0):
+        """等待当前底盘导航任务完成。"""
         return self._wait_navi_done(timeout)
     
     def points_move(self, points, vel_line=0.25, vel_rotate_deg=10.0, timeout=120.0):

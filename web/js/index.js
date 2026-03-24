@@ -104,6 +104,24 @@ const App = {
                 'cam_capture': ['相机', '采集'],
             };
             return paths[this.currentMenu] || [];
+        },
+        batterySoc() {
+            const value = Number(this.robotStatus?.battery?.soc);
+            if (!Number.isFinite(value)) return null;
+            return Math.max(0, Math.min(100, value));
+        },
+        batteryText() {
+            return this.batterySoc === null ? '--%' : `${Math.round(this.batterySoc)}%`;
+        },
+        batteryLevelClass() {
+            if (this.batterySoc === null) return 'battery-unknown';
+            if (this.batterySoc <= 20) return 'battery-low';
+            if (this.batterySoc <= 50) return 'battery-medium';
+            return 'battery-good';
+        },
+        batteryCharging() {
+            const batteries = this.robotStatus?.battery?.batteries;
+            return Array.isArray(batteries) && batteries.some(item => item.charging);
         }
     },
     template: `
@@ -143,6 +161,7 @@ const App = {
             <symbol id="ui-icon-folder" viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v12H3z"/></symbol>
             <symbol id="ui-icon-folder-open" viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v3H7L3 20z"/></symbol>
             <symbol id="ui-icon-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></symbol>
+            <symbol id="ui-icon-pause" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></symbol>
             <symbol id="ui-icon-next" viewBox="0 0 24 24"><path d="M5 4l10 8-10 8zM18 5v14"/></symbol>
             <symbol id="ui-icon-bug" viewBox="0 0 24 24"><rect x="7" y="6" width="10" height="13" rx="5"/><path d="M9 6V3M15 6V3M4 10h3M17 10h3M4 15h3M17 15h3M12 9v7"/></symbol>
             <symbol id="ui-icon-upload" viewBox="0 0 24 24"><path d="M12 16V3M7 8l5-5 5 5M4 15v6h16v-6"/></symbol>
@@ -150,6 +169,7 @@ const App = {
             <symbol id="ui-icon-power" viewBox="0 0 24 24"><path d="M12 2v10M7 5a8 8 0 1 0 10 0"/></symbol>
             <symbol id="ui-icon-repeat" viewBox="0 0 24 24"><path d="M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3"/></symbol>
             <symbol id="ui-icon-home" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8M5 10v11h14V10M9 21v-7h6v7"/></symbol>
+            <symbol id="ui-icon-battery" viewBox="0 0 24 24"><rect x="2" y="6" width="18" height="12" rx="2"/><path d="M22 10v4"/></symbol>
         </svg>
 
         <nav id="toolbar" @click.stop>
@@ -199,6 +219,16 @@ const App = {
 
             <div class="toolbar-right">
                 <span class="brand-logo"><img src="minth-logo.png" alt="Minth Group" /></span>
+                <div
+                    class="battery-status"
+                    :class="batteryLevelClass"
+                    :title="batteryCharging ? '机器人电池正在充电' : '机器人电池电量'"
+                    aria-label="机器人电池电量"
+                >
+                    <ui-icon name="battery"></ui-icon>
+                    <span>{{ batteryText }}</span>
+                    <span v-if="batteryCharging" class="battery-charging" title="充电中">⚡</span>
+                </div>
                 <div class="nav-breadcrumb">
                     <span class="brand" @click="toggleHome">轮式人形机器人</span>
                     <template v-for="item in navBreadcrumb" :key="item">

@@ -330,14 +330,20 @@ class ServiceApplication:
             result = controller.relative2_move(
                 payload["x"], payload["y"], payload["rotate"],
                 payload.get("vel_line", 0.25), payload.get("vel_rotate", 10.0))
-        elif cmd == "point":
+        elif cmd in {"point", "point_no_wait"}:
             point = self._find_named(self.controllers["db"].get_map_points(), payload.get("name"))
             if point is None:
                 point = self._find_named(
                     controller.get_map_points(), payload.get("name"))
             if point is None:
                 raise KeyError(f"地图点位不存在: {payload.get('name')}")
-            result = controller.point_move(point)
+            result = (
+                controller.point_move2(point)
+                if cmd == "point_no_wait"
+                else controller.point_move(point)
+            )
+        elif cmd == "wait_motion":
+            result = controller.wait_navigation_done(payload.get("timeout", 120.0))
         elif cmd == "points":
             points = [
                 self._find_named(self.controllers["db"].get_map_points(), name)

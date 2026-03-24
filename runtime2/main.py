@@ -1,15 +1,18 @@
-# 本文件内容复制自用户程序：demo.py
-#!/usr/bin/env python3
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# 本文件内容复制自用户程序：test3.py
 
 from runtime2 import G2
 
-
 with G2() as 机器人:
-    机器人.语音输出("runtime2 已启动")
-    # 真实运动前必须由现场人员确认环境安全，再取消下一行注释。
-    # 机器人.底盘相对运动(前后=100, 左右=0, 转角=0)
-    print(1234)
+
+    机器人.底盘到点运动不等待("P1")
+    机器人.全身关节运动("A1", 角速度=0.1)
+    机器人.左手关节运动("JL1", 角速度=0.1)
+
+    机器人.末端偏移量(
+        右偏移量={
+            "position": [0.0, 0.0, 0.05],
+            "rotation": [0.0, 0.0, 0.0],
+        }
+    )
+
+    机器人.等待底盘运动结束(timeout=180)                                             

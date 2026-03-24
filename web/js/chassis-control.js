@@ -186,12 +186,10 @@ export default {
             if (!this.selectedPoint) return;
             const pt = this.mapPoints.find(p => p.name === this.selectedPoint);
             if (!pt) return;
-            if (pt.source === 'map' && /^\d+$/.test(pt.name)) {
-                // 后端点位序号从 0 开始，前端显示从 1 开始，发送时需减 1
-                mqttClient.publishCommand('go', parseInt(pt.name) - 1);
-            } else {
-                mqttClient.publishCommand('go', pt.name);
-            }
+            // 点位名称由地图服务原样返回。即使名称是 "1"、"2"、"3"，
+            // 也必须按字符串发送；服务端会优先按 name 精确查找。
+            // 不能转换成从 0 开始的数组索引，否则选择 2 会错误导航到点位 1。
+            mqttClient.publishCommand('go', pt.name);
             console.log('[底盘] 到位', this.selectedPoint);
         },
         onMapPoints(data) {
@@ -328,7 +326,7 @@ export default {
             for (const pt of this.mapPoints) {
                 if (!pt.position || pt.position.length < 2) continue;
                 const [px, py] = this.worldToCanvas(pt.position[0], pt.position[1]);
-                this.drawPoint(ctx, px, py, pt.name, pt.source === 'map' ? '#409eff' : '#e6a23c');
+                this.drawPoint(ctx, px, py, pt.name, pt.source === 'map' ? '#00499d' : '#00499d');
             }
 
             // 画底盘位置
@@ -381,7 +379,7 @@ export default {
         drawAxes(ctx, W, H) {
             const [ox, oy] = this.worldToCanvas(0, 0);
             // X 轴（水平）
-            ctx.strokeStyle = '#409eff';
+            ctx.strokeStyle = '#00499d';
             ctx.lineWidth = 1.5;
             ctx.beginPath();
             ctx.moveTo(0, oy);
@@ -418,8 +416,8 @@ export default {
             ctx.translate(px, py);
             // 画布 Y 翻转，所以角度取反
             ctx.rotate(-yaw);
-            ctx.fillStyle = '#67c23a';
-            ctx.strokeStyle = '#409eff';
+            ctx.fillStyle = '#00499d';
+            ctx.strokeStyle = '#00499d';
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.moveTo(size, 0);          // 前端
@@ -431,7 +429,7 @@ export default {
             ctx.restore();
 
             // 标签
-            ctx.fillStyle = '#67c23a';
+            ctx.fillStyle = '#00499d';
             ctx.font = 'bold 12px monospace';
             ctx.fillText('底盘', px + 12, py + 4);
         },

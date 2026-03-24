@@ -5,14 +5,17 @@
 #  功能：
 #    1. source /home/agi/app/gdk/scripts/env.sh /home/agi/app 加载 GDK 环境变量
 #    2. 后台启动 /data/wxf/mbu0917/service2/main.py
-#    3. 以 /data/wxf/mbu0917/web 为根目录启动 HTTP :8002
+#    3. 从 /data 工作目录启动 /data/wxf/mbu0917/runtime2/run.py
+#    4. 以 /data/wxf/mbu0917/web 为根目录启动 HTTP :8002
 #
 #  运行目录：
 #    service2 服务：/data/wxf/mbu0917/service2
+#    runtime2 调试服务：/data
 #    web 静态页：/data/wxf/mbu0917/web
 #
 #  日志：
 #    logs/humanoid_server.log
+#    logs/runtime_server.log
 #    logs/web_server.log
 #
 #  用法：
@@ -38,6 +41,8 @@ RUN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$RUN_DIR/.." && pwd)"
 WEB_DIR="$PROJECT_DIR/web"
 BACKEND_PATH="$RUN_DIR/main.py"
+RUNTIME_PATH="$PROJECT_DIR/runtime2/run.py"
+RUNTIME_WORK_DIR="/data"
 cd "$RUN_DIR" || exit 1
 
 # 加载 GDK 环境变量。必须显式传入 /home/agi/app，不能继承 run.sh 参数。
@@ -54,6 +59,7 @@ export PYTHONPATH="/home/agi/.local/lib/python3.10/site-packages${PYTHONPATH:+:$
 
 SERVICES=(
     "humanoid_server|$BACKEND_PATH"
+    "runtime_server|$RUNTIME_PATH"
     "web_server|CMD:python3 -m http.server 8002|$WEB_DIR"
 )
 LOG_DIR="$RUN_DIR/logs"
@@ -87,6 +93,18 @@ is_backend_pid() {
     [[ "${argv[1]}" == "$BACKEND_PATH" ]]
 }
 
+is_runtime_pid() {
+    local pid="$1" cwd
+    local -a argv=()
+    process_alive "$pid" || return 1
+    mapfile -d '' -t argv < "/proc/$pid/cmdline" 2>/dev/null || return 1
+    ((${#argv[@]} == 2)) || return 1
+    is_python_argv0 "${argv[0]}" || return 1
+    [[ "${argv[1]}" == "$RUNTIME_PATH" ]] || return 1
+    cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null)"
+    [[ "$cwd" == "$RUNTIME_WORK_DIR" ]]
+}
+
 is_web_pid() {
     local pid="$1" cwd
     local -a argv=()
@@ -103,6 +121,7 @@ is_expected_pid() {
     local name="$1" pid="$2"
     case "$name" in
         humanoid_server) is_backend_pid "$pid" ;;
+        runtime_server) is_runtime_pid "$pid" ;;
         web_server) is_web_pid "$pid" ;;
         *) return 1 ;;
     esac
@@ -226,7 +245,17 @@ start_service() {
     [[ "$prep_rc" -eq 2 ]] && return 0
     [[ "$prep_rc" -eq 0 ]] || return 1
 
-    if [[ "$rest" == CMD:* ]]; then
+    if [[ "$name" == runtime_server ]]; then
+        if [ ! -f "$RUNTIME_PATH" ]; then
+            echo "[run.sh] ❌ 文件不存在: $RUNTIME_PATH" >&2
+            return 1
+        fi
+        if [ ! -d "$RUNTIME_WORK_DIR" ]; then
+            echo "[run.sh] ❌ 工作目录不存在: $RUNTIME_WORK_DIR" >&2
+            return 1
+        fi
+        (cd "$RUNTIME_WORK_DIR" && exec nohup setsid python3 "$RUNTIME_PATH" </dev/null >"$log_file" 2>&1) &
+    elif [[ "$rest" == CMD:* ]]; then
         if [ ! -d "$WEB_DIR" ]; then
             echo "[run.sh] ❌ 工作目录不存在: $WEB_DIR" >&2
             return 1

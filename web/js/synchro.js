@@ -56,7 +56,7 @@ export default {
         <!-- 修改值弹窗 -->
         <div v-if="editDialog.visible" class="save-overlay" @click.self="closeEditDialog">
             <div class="save-dialog" style="width:380px;">
-                <h6 style="color:#e6a23c; margin-bottom:16px;">✏️ 修改变量</h6>
+                <h6 style="color:#00499d; margin-bottom:16px;">✏️ 修改变量</h6>
                 <div class="mv-edit-form">
                     <div class="mv-form-row">
                         <label>设备</label>
@@ -84,7 +84,7 @@ export default {
                 </div>
                 <div class="step-actions">
                     <button class="nav-btn" @click="closeEditDialog"><ui-icon name="x"></ui-icon>取消</button>
-                    <button class="nav-btn" style="background:#e6a23c; color:#fff;" @click="submitEdit"><ui-icon name="edit"></ui-icon>写入</button>
+                    <button class="nav-btn" style="background:#00499d; color:#fff;" @click="submitEdit"><ui-icon name="edit"></ui-icon>写入</button>
                 </div>
             </div>
         </div>

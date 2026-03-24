@@ -1,0 +1,219 @@
+nohup: ignoring input
+[runtime2] 程序调试服务已启动，MQTT=localhost:1883
+[runtime2] 用户程序目录=/data/wxf/mbu0917/runtime2
+[runtime2] 已订阅 /humanoid/programs/control
+[runtime2] delete 失败: 程序不存在: playwright_create_test.py
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325001148168"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325001148168", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325001149041"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325001149041", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "动作开始", "time": "20260325001149935"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001150024"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325001150116"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325001150116", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325001150967"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325001150967", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001151820"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001151911"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001152003"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325001152100"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325001152100", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325001152950"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325001152950", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001153796"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001153887"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001154016"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325001154105"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325001154105", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325001154959"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325001154959", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001155804"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001155891"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001156024"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325001156116"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325001156116", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325001156967"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325001156967", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001157821"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001157907"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001157999"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325001158092"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325001158092", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325001158985"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325001158985", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001159832"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325001159920"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325001159920", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325001200772"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325001200772", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001201416"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001201503"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001201635"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325001201744"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325001201744", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325001202596"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325001202596", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001203249"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001203335"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001203423"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325001203512"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325001203512", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325001204405"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325001204405", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001205054"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001205143"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001205235"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325001205326"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325001205326", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325001206217"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325001206217", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001206866"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001206960"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325001207047"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325001207145"}
+nohup: ignoring input
+[runtime2] 程序调试服务已启动，MQTT=localhost:1883
+[runtime2] 用户程序目录=/data/wxf/mbu0917/runtime2
+[runtime2] 已订阅 /humanoid/programs/control
+40
+40
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325024216009"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024216009", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325024216882"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024216882", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "动作开始", "time": "20260325024217528"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024217659"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325024217748"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024217748", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325024218613"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024218613", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024219481"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024219612"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024219699"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325024219792"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024219792", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325024220645"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024220645", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024221493"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024226193"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024226264"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325024226400"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024226400", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325024227251"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024227251", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024227947"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024228039"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024228131"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325024228237"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024228237", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325024229086"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024229086", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024229940"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024230039"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024230127"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325024230220"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024230220", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325024231069"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024231069", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024231965"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325024232056"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024232056", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325024232906"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024232906", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024233753"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024233847"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024233939"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325024234073"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024234073", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325024234966"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024234966", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024235813"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024235955"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024236047"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325024236141"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024236141", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325024236990"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024236990", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024237838"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024237927"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024238019"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325024238152"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024238152", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325024239007"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024239007", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024239900"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024240035"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024240174"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325024240264"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024240264", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325024241113"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024241113", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024241964"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024242055"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024242191"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325024242280"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024242280", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325024243174"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024243174", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024244024"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024244115"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024244204"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325024247926"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024247926", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325024248756"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024248756", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024249610"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024249699"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024249835"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325024249924"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024249924", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325024250777"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024250777", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024251624"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024251711"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024251848"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325024251936"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024251936", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325024252786"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024252786", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024253634"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024253723"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024253811"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325024253900"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024253900", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325024254798"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024254798", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024255448"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024255537"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024259164"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325024259233"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024259233", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325024300082"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024300082", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024300976"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024301067"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024301158"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325024301248"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024301248", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325024302098"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024302098", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024302987"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024303079"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024303179"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325024303273"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024303273", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325024304122"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024304122", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325024555838"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024555838", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325024556711"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024556711", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "动作开始", "time": "20260325024557568"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024557657"}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 1.0, "right": 1.0, "time": "20260325024557788"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024557788", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/ee/request/: {"cmd": "both_grippers", "left": 0.0, "right": 0.0, "time": "20260325024558638"}
+[runtime2] MQTT /humanoid/done/: {"cmd": "both_grippers", "time": "20260325024558638", "type": "ee", "success": true}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024559531"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024559620"}
+[runtime2] MQTT /humanoid/tts/request/: {"cmd": "speak", "text": "好啊好啊", "time": "20260325024559708"}

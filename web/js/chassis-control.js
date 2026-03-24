@@ -326,7 +326,9 @@ export default {
             for (const pt of this.mapPoints) {
                 if (!pt.position || pt.position.length < 2) continue;
                 const [px, py] = this.worldToCanvas(pt.position[0], pt.position[1]);
-                this.drawPoint(ctx, px, py, pt.name, pt.source === 'map' ? '#00499d' : '#00499d');
+                const yaw = this.pointYaw(pt);
+                this.drawPoint(ctx, px, py, pt.name,
+                    pt.source === 'map' ? '#00499d' : '#00499d', yaw);
             }
 
             // 画底盘位置
@@ -396,7 +398,56 @@ export default {
             ctx.fillText('X+', W - 24, oy - 6);
             ctx.fillText('Y+', ox + 6, 16);
         },
-        drawPoint(ctx, px, py, label, color) {
+        pointYaw(point) {
+            if (Number.isFinite(Number(point.yaw))) {
+                return Number(point.yaw);
+            }
+            const orientation = point.orientation;
+            let qx, qy, qz, qw;
+            if (Array.isArray(orientation) && orientation.length >= 4) {
+                [qx, qy, qz, qw] = orientation.map(Number);
+            } else if (orientation && typeof orientation === 'object') {
+                qx = Number(orientation.x);
+                qy = Number(orientation.y);
+                qz = Number(orientation.z);
+                qw = Number(orientation.w);
+            } else {
+                return null;
+            }
+            if (![qx, qy, qz, qw].every(Number.isFinite)) return null;
+            const norm = Math.hypot(qx, qy, qz, qw);
+            if (norm < 1e-9) return null;
+            qx /= norm;
+            qy /= norm;
+            qz /= norm;
+            qw /= norm;
+            return Math.atan2(
+                2 * (qw * qz + qx * qy),
+                1 - 2 * (qy * qy + qz * qz)
+            );
+        },
+        drawPoint(ctx, px, py, label, color, yaw) {
+            // 点位方向：地图 X 正方向为 0；画布 Y 轴向下，因此旋转角取反。
+            if (Number.isFinite(yaw)) {
+                const arrowStart = 7;
+                const arrowEnd = 22;
+                const arrowHead = 6;
+                ctx.save();
+                ctx.translate(px, py);
+                ctx.rotate(-yaw);
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.beginPath();
+                ctx.moveTo(arrowStart, 0);
+                ctx.lineTo(arrowEnd, 0);
+                ctx.lineTo(arrowEnd - arrowHead, -4);
+                ctx.moveTo(arrowEnd, 0);
+                ctx.lineTo(arrowEnd - arrowHead, 4);
+                ctx.stroke();
+                ctx.restore();
+            }
             ctx.fillStyle = color;
             ctx.beginPath();
             ctx.arc(px, py, 5, 0, Math.PI * 2);

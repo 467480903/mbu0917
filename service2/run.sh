@@ -3,10 +3,11 @@
 #  G2 机器人 service2 控制服务 - 启动脚本
 #
 #  功能：
-#    1. source /home/agi/app/gdk/scripts/env.sh /home/agi/app 加载 GDK 环境变量
-#    2. 后台启动 /data/wxf/mbu0917/service2/main.py
-#    3. 从 /data 工作目录启动 /data/wxf/mbu0917/runtime2/run.py
-#    4. 以 /data/wxf/mbu0917/web 为根目录启动 HTTP :8002
+#    1. source /home/agi/app/env.sh /home/agi/app 加载 GDK 环境变量
+#    2. 后台启动 /data/wxf/mbu0917/service2/g2.py
+#    3. 使用 .venv-apriltag 启动独立 service2/apriltag.py
+#    4. 从 /data 工作目录启动 /data/wxf/mbu0917/runtime2/run.py
+#    5. 显式指定 /data/wxf/mbu0917/web 为 HTTP :8002 的页面根目录
 #
 #  运行目录：
 #    service2 服务：/data/wxf/mbu0917/service2
@@ -15,6 +16,7 @@
 #
 #  日志：
 #    logs/humanoid_server.log
+#    logs/apriltag_server.log
 #    logs/runtime_server.log
 #    logs/web_server.log
 #
@@ -40,13 +42,17 @@ fi
 RUN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$RUN_DIR/.." && pwd)"
 WEB_DIR="$PROJECT_DIR/web"
-BACKEND_PATH="$RUN_DIR/main.py"
+WEB_WORK_DIR="/data"
+BACKEND_PATH="$RUN_DIR/g2.py"
+APRILTAG_PATH="$RUN_DIR/apriltag.py"
+APRILTAG_PYTHON="$PROJECT_DIR/.venv-apriltag/bin/python"
+APRILTAG_PYTHONPATH="/home/agi/.local/lib/python3.10/site-packages"
 RUNTIME_PATH="$PROJECT_DIR/runtime2/run.py"
 RUNTIME_WORK_DIR="/data"
 cd "$RUN_DIR" || exit 1
 
 # 加载 GDK 环境变量。必须显式传入 /home/agi/app，不能继承 run.sh 参数。
-ENV_FILE="/home/agi/app/gdk/scripts/env.sh"
+ENV_FILE="/home/agi/app/env.sh"
 ENV_DIR="/home/agi/app"
 if [ -f "$ENV_FILE" ]; then
     echo "[run.sh] 正在加载环境变量: source $ENV_FILE $ENV_DIR"
@@ -59,8 +65,9 @@ export PYTHONPATH="/home/agi/.local/lib/python3.10/site-packages${PYTHONPATH:+:$
 
 SERVICES=(
     "humanoid_server|$BACKEND_PATH"
+    "apriltag_server|$APRILTAG_PATH"
     "runtime_server|$RUNTIME_PATH"
-    "web_server|CMD:python3 -m http.server 8002|$WEB_DIR"
+    "web_server|CMD:python3 -m http.server 8002 --directory $WEB_DIR|$WEB_WORK_DIR"
 )
 LOG_DIR="$RUN_DIR/logs"
 mkdir -p "$LOG_DIR"
@@ -70,11 +77,15 @@ is_pid() {
 }
 
 process_alive() {
-    local pid="$1" stat
+    local pid="$1" stat_line stat
     is_pid "$pid" || return 1
     kill -0 "$pid" 2>/dev/null || return 1
-    stat="$(ps -o stat= -p "$pid" 2>/dev/null)"
-    [[ -n "$stat" && "$stat" != Z* ]]
+    # cleanup_orphans 会遍历 /proc。这里不能为每个 PID 再派生一个 ps 进程，
+    # 否则在进程较多的机器人上会超过 systemd 的 90 秒启动超时。
+    IFS= read -r stat_line < "/proc/$pid/stat" 2>/dev/null || return 1
+    stat="${stat_line##*) }"
+    stat="${stat%% *}"
+    [[ -n "$stat" && "$stat" != Z && "$stat" != X ]]
 }
 
 is_python_argv0() {
@@ -91,6 +102,16 @@ is_backend_pid() {
     ((${#argv[@]} == 2)) || return 1
     is_python_argv0 "${argv[0]}" || return 1
     [[ "${argv[1]}" == "$BACKEND_PATH" ]]
+}
+
+is_apriltag_pid() {
+    local pid="$1"
+    local -a argv=()
+    process_alive "$pid" || return 1
+    mapfile -d '' -t argv < "/proc/$pid/cmdline" 2>/dev/null || return 1
+    ((${#argv[@]} == 2)) || return 1
+    is_python_argv0 "${argv[0]}" || return 1
+    [[ "${argv[1]}" == "$APRILTAG_PATH" ]]
 }
 
 is_runtime_pid() {
@@ -110,17 +131,19 @@ is_web_pid() {
     local -a argv=()
     process_alive "$pid" || return 1
     mapfile -d '' -t argv < "/proc/$pid/cmdline" 2>/dev/null || return 1
-    ((${#argv[@]} == 4)) || return 1
+    ((${#argv[@]} == 6)) || return 1
     is_python_argv0 "${argv[0]}" || return 1
     [[ "${argv[1]}" == "-m" && "${argv[2]}" == "http.server" && "${argv[3]}" == "8002" ]] || return 1
+    [[ "${argv[4]}" == "--directory" && "${argv[5]}" == "$WEB_DIR" ]] || return 1
     cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null)"
-    [[ "$cwd" == "$WEB_DIR" ]]
+    [[ "$cwd" == "$WEB_WORK_DIR" ]]
 }
 
 is_expected_pid() {
     local name="$1" pid="$2"
     case "$name" in
         humanoid_server) is_backend_pid "$pid" ;;
+        apriltag_server) is_apriltag_pid "$pid" ;;
         runtime_server) is_runtime_pid "$pid" ;;
         web_server) is_web_pid "$pid" ;;
         *) return 1 ;;
@@ -245,7 +268,18 @@ start_service() {
     [[ "$prep_rc" -eq 2 ]] && return 0
     [[ "$prep_rc" -eq 0 ]] || return 1
 
-    if [[ "$name" == runtime_server ]]; then
+    if [[ "$name" == apriltag_server ]]; then
+        if [ ! -x "$APRILTAG_PYTHON" ]; then
+            echo "[run.sh] ❌ Apriltag Python 不可执行: $APRILTAG_PYTHON" >&2
+            return 1
+        fi
+        if [ ! -f "$APRILTAG_PATH" ]; then
+            echo "[run.sh] ❌ 文件不存在: $APRILTAG_PATH" >&2
+            return 1
+        fi
+        (cd "$RUN_DIR" && exec nohup setsid env PYTHONPATH="$APRILTAG_PYTHONPATH" \
+            "$APRILTAG_PYTHON" "$APRILTAG_PATH" </dev/null >"$log_file" 2>&1) &
+    elif [[ "$name" == runtime_server ]]; then
         if [ ! -f "$RUNTIME_PATH" ]; then
             echo "[run.sh] ❌ 文件不存在: $RUNTIME_PATH" >&2
             return 1
@@ -260,7 +294,11 @@ start_service() {
             echo "[run.sh] ❌ 工作目录不存在: $WEB_DIR" >&2
             return 1
         fi
-        (cd "$WEB_DIR" && exec nohup setsid python3 -m http.server 8002 </dev/null >"$log_file" 2>&1) &
+        if [ ! -d "$WEB_WORK_DIR" ]; then
+            echo "[run.sh] ❌ 工作目录不存在: $WEB_WORK_DIR" >&2
+            return 1
+        fi
+        (cd "$WEB_WORK_DIR" && exec nohup setsid python3 -m http.server 8002 --directory "$WEB_DIR" </dev/null >"$log_file" 2>&1) &
     else
         if [ ! -f "$BACKEND_PATH" ]; then
             echo "[run.sh] ❌ 文件不存在: $BACKEND_PATH" >&2

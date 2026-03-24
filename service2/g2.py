@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""serivces2 的统一 MQTT 服务入口。"""
+"""G2 机器人控制、状态和摄像头 MQTT 服务入口。"""
 
 import json
 import math
@@ -12,7 +12,6 @@ from concurrent.futures import ThreadPoolExecutor
 import agibot_gdk
 import paho.mqtt.client as mqtt
 
-from apriltag_controller import ApriltagController
 from camera_controller import CameraController
 from chassis_controller import ChassisController
 from database_controller import DatabaseController
@@ -129,19 +128,16 @@ class ServiceApplication:
             agibot_gdk, self.client, topics["tts"]["response"])
         camera = CameraController(
             agibot_gdk, self.client, topics["camera"]["response"], self._path("images"))
-        apriltag = ApriltagController(
-            self.client, topics["apriltag"]["response"], self._path("images"))
         database = DatabaseController(
             os.path.join(self._path("datas"), "robot_data.db"), joint, pose, chassis)
         sync = SyncController(
             self.client, self.sync_response, self._path("datas"), self.sync_data)
         database.init()
-        apriltag.init()
         sync.load_config()
         self.controllers = {
             "chassis": chassis, "joint": joint, "pose": pose,
             "ee": end_effector, "tts": interaction, "camera": camera,
-            "apriltag": apriltag, "db": database, "sync": sync,
+            "db": database, "sync": sync,
         }
 
     def _on_connect(self, client, userdata, flags, reason_code, properties=None):
@@ -154,8 +150,8 @@ class ServiceApplication:
             print(f"[MQTT] 连接失败: {reason_code}")
             return
         request_topics = [
-            value["request"] for value in self.topics.values()
-            if isinstance(value, dict) and "request" in value
+            value["request"] for name, value in self.topics.items()
+            if name != "apriltag" and isinstance(value, dict) and "request" in value
         ]
         request_topics.append(self.sync_request)
         request_topics.extend([
@@ -238,7 +234,6 @@ class ServiceApplication:
             self.topics["ee"]["request"]: self._handle_end_effector,
             self.topics["tts"]["request"]: self._handle_tts,
             self.topics["camera"]["request"]: self._handle_camera,
-            self.topics["apriltag"]["request"]: self._handle_apriltag,
             self.topics["db"]["request"]: self._handle_database,
             self.topics["maptest"]["request"]: self._handle_maptest,
             self.sync_request: self._handle_sync,
@@ -403,7 +398,7 @@ class ServiceApplication:
         elif cmd == "both":
             result = controller.move_both_arms(payload["left"], payload["right"])
         elif cmd == "waist":
-            result = controller.move_waist(payload["offset"])
+            result = controller.move_waist(payload["offset"], payload.get("speed"))
         else:
             raise ValueError(f"未知位姿命令: {cmd}")
         self._require_success(result, cmd)
@@ -454,17 +449,6 @@ class ServiceApplication:
             extra["path"] = os.path.join(controller.image_save_dir, result)
         self._response("camera", payload, result is not None, **extra)
 
-    def _handle_apriltag(self, payload):
-        cmd = payload.get("cmd")
-        controller = self.controllers["apriltag"]
-        if cmd == "detect_file":
-            result = controller.detect_file(payload["file"])
-        elif cmd == "detect_saved":
-            result = controller.detect_saved_image(payload["file"])
-        else:
-            raise ValueError(f"未知 Apriltag 命令: {cmd}")
-        self._response("apriltag", payload, True, result=result)
-
     def _move_stored_joint(self, payload):
         expected_type = payload.get("type")
         item = next((candidate for candidate in self.controllers["db"].get_joints()
@@ -508,7 +492,7 @@ class ServiceApplication:
                             "orientation": self._orientation(right)}
             return controller.move_both_arms(left_target, right_target)
         if kind == "waist":
-            return controller.move_waist(value)
+            return controller.move_waist_to_pose(value, payload.get("speed"))
         raise ValueError(f"未知坐标姿态类型: {kind}")
 
     def _handle_database(self, payload):
@@ -722,6 +706,12 @@ class ServiceApplication:
                      values.get("ry", 0.0) / 1000.0,
                      values.get("rz", 0.0) / 1000.0],
                     [values.get("rrx", 0.0), values.get("rry", 0.0), values.get("rrz", 0.0)]) and result
+        elif command == "waist_move":
+            values = data or {}
+            result = self.controllers["pose"].move_waist(
+                [float(values.get("forward", 0.0)), 0.0,
+                 float(values.get("up", 0.0))],
+                values.get("speed"))
         elif command == "grab":
             values = data or {}
             left = values.get("left")
@@ -825,18 +815,25 @@ class ServiceApplication:
             "rx": orientation[0], "ry": orientation[1], "rz": orientation[2],
         }
 
+    @staticmethod
+    def _waist_for_database(pose):
+        return {key: float(pose.get(key, 0.0))
+                for key in ("x", "y", "z", "rx", "ry", "rz")}
+
     def _handle_legacy_position(self, payload):
         command = payload.get("command")
         data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
         kind, name = data.get("type"), data.get("name")
         db = self.controllers["db"]
-        if kind not in ("left", "right", "both") or not name:
+        if kind not in ("left", "right", "both", "waist") or not name:
             raise ValueError("坐标点位缺少有效的 type/name")
         if command == "goto":
             success = self._move_stored_position({"name": name, "type": kind})
         elif command == "update":
             pose = self.controllers["pose"]
-            if kind == "both":
+            if kind == "waist":
+                value = self._waist_for_database(pose.get_waist_status())
+            elif kind == "both":
                 value = {
                     "left": self._pose_for_database(pose.get_current_pose("left")),
                     "right": self._pose_for_database(pose.get_current_pose("right")),

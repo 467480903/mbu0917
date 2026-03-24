@@ -5,15 +5,15 @@ import { createApp } from 'vue';
 import { UrdfViewer } from './urdf-viewer.js';
 import { mqttClient } from './mqtt-client.js';
 import TeachJoints     from './teach-joints.js';
-import TeachCoords     from './teach-coords.js';
+import TeachCoords     from './teach-coords.js?v=20261102-waist-variable';
 import ProgramView     from './program-view.js';
 import MapView         from './map-view.js';
 import CameraView      from './camera-view.js';
 import DataJoints       from './data-joints.js';
-import DataCoords       from './data-coords.js';
+import DataCoords       from './data-coords.js?v=20261102-waist-variable';
 import DataMapPoints    from './data-map-points.js';
 import SynchroView      from './synchro.js';
-import ChassisControl  from './chassis-control.js';
+import ChassisControl  from './chassis-control.js?v=20261102-point-direction';
 
 const UiIcon = {
     props: { name: { type: String, required: true } },

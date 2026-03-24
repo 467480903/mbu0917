@@ -1,5 +1,5 @@
 // data-coords.js
-// 坐标点位数据管理页面：读取、到位（末端姿态运动）、更新、删除
+// 姿态变量数据管理页面：读取、到位、更新、删除
 // 只处理 positions 数据，不处理关节和地图点位
 
 import { mqttClient } from './mqtt-client.js';
@@ -24,7 +24,7 @@ export default {
                         :class="{ 'djc-row-selected': selectedIdx === idx }"
                         @click="selectRow(idx)">
                         <td>坐标</td>
-                        <td>{{ item.type }}</td>
+                        <td>{{ typeLabel(item.type) }}</td>
                         <td>{{ item.name }}</td>
                         <td class="djc-summary">{{ summarize(item) }}</td>
                     </tr>
@@ -42,7 +42,7 @@ export default {
                 <span v-if="items.length > 0" class="djc-count-bar">共 {{ items.length }} 条</span>
                 <span v-if="statusMsg" class="djc-sel-info">{{ statusMsg }}</span>
                 <span v-else-if="selectedItem" class="djc-sel-info">
-                    选中: 坐标 · {{ selectedItem.type }} · {{ selectedItem.name }}
+                    选中: 姿态 · {{ typeLabel(selectedItem.type) }} · {{ selectedItem.name }}
                 </span>
             </div>
             <div class="djc-actions">
@@ -93,6 +93,9 @@ export default {
         }
     },
     methods: {
+        typeLabel(type) {
+            return ({ left: '左手', right: '右手', both: '左右手', waist: '腰部' })[type] || type;
+        },
         readData() {
             mqttClient.publishDataReq('read');
             console.log('[坐标数据] 已请求读取');
@@ -107,6 +110,9 @@ export default {
             if (item.type === 'both' && v.left && v.right) {
                 return `左 (${fmt(v.left)}) / 右 (${fmt(v.right)})`;
             }
+            if (item.type === 'waist') {
+                return waistFmt(v);
+            }
             return fmt(v);
 
             function fmt(p) {
@@ -116,6 +122,11 @@ export default {
                     return Number.isFinite(val) ? val.toFixed(2) : '-';
                 };
                 return `x=${n('x')}, y=${n('y')}, z=${n('z')}`;
+            }
+            function waistFmt(p) {
+                if (!p || typeof p !== 'object') return '-';
+                const n = k => Number.isFinite(Number(p[k])) ? Number(p[k]).toFixed(3) : '-';
+                return `x=${n('x')}, z=${n('z')}, rx=${n('rx')}, ry=${n('ry')}, rz=${n('rz')}`;
             }
         },
         onDataResp(data) {
@@ -170,7 +181,7 @@ export default {
             if (!item) return;
             this.showConfirm(
                 '确认到位',
-                `确定要让机器人运动到坐标「${item.type}/${item.name}」吗？请确保周围环境安全。`,
+                `确定要让机器人运动到姿态「${this.typeLabel(item.type)}/${item.name}」吗？请确保周围环境安全。`,
                 '▶',
                 'djc-icon-go',
                 'djc-btn-go',
@@ -180,8 +191,8 @@ export default {
         doGoTo() {
             const item = this.selectedItem;
             if (!item) return;
-            // 到位：末端运动到数据库中的位姿（走 positions 控制通道）
-            this.statusMsg = `末端运动中: ${item.name}...`;
+            // 到位：对应部位运动到数据库中的姿态（走 positions 控制通道）
+            this.statusMsg = `${this.typeLabel(item.type)}运动中: ${item.name}...`;
             mqttClient.publishPositionsControl('goto', {
                 type: item.type,
                 name: item.name,
@@ -193,7 +204,7 @@ export default {
             if (!item) return;
             this.showConfirm(
                 '确认更新',
-                `确定要用当前机器人末端位姿更新坐标「${item.type}/${item.name}」吗？原有数据将被覆盖。`,
+                `确定要用当前机器人姿态更新变量「${this.typeLabel(item.type)}/${item.name}」吗？原有数据将被覆盖。`,
                 '↻',
                 'djc-icon-update',
                 'djc-btn-update',
@@ -216,7 +227,7 @@ export default {
             if (!item) return;
             this.showConfirm(
                 '确认删除',
-                `确定要删除坐标「${item.type}/${item.name}」吗？此操作不可恢复。`,
+                `确定要删除姿态变量「${this.typeLabel(item.type)}/${item.name}」吗？此操作不可恢复。`,
                 '✕',
                 'djc-icon-delete',
                 'djc-btn-delete',

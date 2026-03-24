@@ -49,6 +49,28 @@ class PoseController:
         self.max_step_cm = 0.1
         self.lifetime = 0.02
         self.rate_hz = 50.0
+
+        # 腰腿串联链（web/meshes/model.urdf，base_link -> body_link5）。
+        # 前三个关节均绕 Y 轴，负责 X/Z 平面运动；关节 4/5 为横滚/偏航，
+        # 笛卡尔平移时保持当前值。这里使用 URDF 原点变换直接计算，它与
+        # 对应的改进 DH 链等价，避免把非 Z 轴关节强行套入标准 DH 后丢失轴向。
+        self.waist_joint_keys = [
+            "idx01_body_joint1", "idx02_body_joint2", "idx03_body_joint3",
+            "idx04_body_joint4", "idx05_body_joint5",
+        ]
+        self.waist_base_x = 0.102
+        self.waist_base_z = 0.144
+        self.waist_link_lengths = (0.360, 0.380, 0.149)
+        self.waist_joint_limits = (
+            (-1.0821, 0.0),
+            (0.0, 2.6529),
+            (-1.9190, 1.1170),
+            (-0.436332313, 0.436332313),
+            (-3.045599545, 3.045599545),
+        )
+        self.waist_speed = 0.20
+        self.waist_max_cartesian_step = 0.03
+        self.waist_max_joint_step = 0.20
     
     def _publish_response(self, cmd, ts, success=False, extra=None):
         """发布反馈报文"""
@@ -173,6 +195,121 @@ class PoseController:
         right = self.find_pose_in_status(status, self.right_name)
         return {"left_ee": left, "right_ee": right}
 
+    def _get_current_waist_angles(self):
+        """读取五个腰腿关节当前角度（弧度）。"""
+        states = self.robot.get_joint_states()
+        if not isinstance(states, dict) or not isinstance(states.get("states"), list):
+            raise RuntimeError("GDK 返回的关节状态格式不正确")
+        current = {}
+        for state in states["states"]:
+            name = state.get("name")
+            value = state.get("position", state.get("motor_position"))
+            if name and value is not None:
+                current[str(name)] = float(value)
+        missing = [name for name in self.waist_joint_keys if name not in current]
+        if missing:
+            raise RuntimeError(f"腰腿关节状态不完整: {missing}")
+        return [current[name] for name in self.waist_joint_keys]
+
+    def _waist_forward_kinematics(self, joints):
+        """按 URDF 链计算 body_link5 在 base_link 下的 X/Z/俯仰。"""
+        if len(joints) != 5:
+            raise ValueError("腰腿正解需要 5 个关节角")
+        q1, q2, q3, q4, _q5 = [float(value) for value in joints]
+        link1, link2, link3 = self.waist_link_lengths
+        pitch12 = q1 + q2
+        pitch = pitch12 + q3
+        roll_projection = math.cos(q4)
+        x = (self.waist_base_x
+             + link1 * math.sin(q1)
+             + link2 * math.sin(pitch12)
+             + link3 * math.sin(pitch) * roll_projection)
+        z = (self.waist_base_z
+             + link1 * math.cos(q1)
+             + link2 * math.cos(pitch12)
+             + link3 * math.cos(pitch) * roll_projection)
+        y = -link3 * math.sin(q4)
+        return {
+            "x": x, "y": y, "z": z,
+            "pitch": pitch, "roll": q4, "yaw": joints[4],
+        }
+
+    def _solve_waist_target(self, current, target_x, target_z,
+                            target_pitch, target_roll, target_yaw,
+                            limit_joint_step=False):
+        """求解腰腿绝对目标；目标坐标位于 base_link 坐标系。"""
+        values = [*current, target_x, target_z, target_pitch,
+                  target_roll, target_yaw]
+        if len(current) != 5 or not all(math.isfinite(float(v)) for v in values):
+            raise ValueError("腰腿绝对目标必须包含有效的五轴当前角和 X/Z/RX/RY/RZ")
+        link1, link2, link3 = self.waist_link_lengths
+        projection = math.cos(target_roll)
+        planar_x = (target_x - self.waist_base_x
+                    - link3 * math.sin(target_pitch) * projection)
+        planar_z = (target_z - self.waist_base_z
+                    - link3 * math.cos(target_pitch) * projection)
+        cosine_q2 = ((planar_x * planar_x + planar_z * planar_z
+                      - link1 * link1 - link2 * link2)
+                     / (2.0 * link1 * link2))
+        if cosine_q2 < -1.0 - 1e-8 or cosine_q2 > 1.0 + 1e-8:
+            raise ValueError("目标超出腰腿 X/Z 可达工作空间")
+        cosine_q2 = max(-1.0, min(1.0, cosine_q2))
+
+        candidates = []
+        for q2 in (math.acos(cosine_q2), -math.acos(cosine_q2)):
+            q1 = (math.atan2(planar_x, planar_z)
+                  - math.atan2(link2 * math.sin(q2),
+                               link1 + link2 * math.cos(q2)))
+            q3 = target_pitch - q1 - q2
+            candidate = [q1, q2, q3, target_roll, target_yaw]
+            if all(lower + 1e-6 <= value <= upper - 1e-6
+                   for value, (lower, upper)
+                   in zip(candidate, self.waist_joint_limits)):
+                distance = sum((candidate[index] - current[index]) ** 2
+                               for index in range(5))
+                candidates.append((distance, candidate))
+        if not candidates:
+            raise ValueError("腰腿逆解超出 URDF 关节限位")
+
+        target = min(candidates, key=lambda item: item[0])[1]
+        max_delta = max(abs(target[index] - current[index]) for index in range(5))
+        if limit_joint_step and max_delta > self.waist_max_joint_step:
+            raise ValueError(
+                f"腰腿单次关节变化 {max_delta:.3f} rad 超过安全限制 "
+                f"{self.waist_max_joint_step:.3f} rad")
+        return target, self._waist_forward_kinematics(target)
+
+    def _waist_inverse_kinematics(self, current, forward, up):
+        """解析逆解 X/Z 增量，并保持上身俯仰及关节 4/5 不变。"""
+        if len(current) != 5:
+            raise ValueError("腰腿逆解需要 5 个当前关节角")
+        if not all(math.isfinite(value) for value in [*current, forward, up]):
+            raise ValueError("腰腿运动参数必须是有限数值")
+        if abs(forward) > self.waist_max_cartesian_step or abs(up) > self.waist_max_cartesian_step:
+            raise ValueError(
+                f"单次腰腿位移不得超过 {self.waist_max_cartesian_step:.3f} m")
+
+        current_pose = self._waist_forward_kinematics(current)
+        target_x = current_pose["x"] + float(forward)
+        target_z = current_pose["z"] + float(up)
+        return self._solve_waist_target(
+            current, target_x, target_z, current_pose["pitch"],
+            current[3], current[4], limit_joint_step=True)
+
+    def get_waist_status(self):
+        """返回网页显示所需的腰腿笛卡尔位置和当前关节角。"""
+        joints = self._get_current_waist_angles()
+        pose = self._waist_forward_kinematics(joints)
+        return {
+            "x": round(pose["x"], 6), "y": round(pose["y"], 6),
+            "z": round(pose["z"], 6),
+            "rx": round(pose["roll"], 6),
+            "ry": round(pose["pitch"], 6),
+            "rz": round(pose["yaw"], 6),
+            "pitch": round(pose["pitch"], 6),
+            "joints": [round(value, 6) for value in joints],
+        }
+
     @staticmethod
     def find_pose_in_status(status, target_name):
         """从已有运动状态中读取指定末端，避免重复调用 GDK。"""
@@ -198,6 +335,7 @@ class PoseController:
     def publish_status(self):
         payload = {"timestamp": time.strftime("%Y-%m-%d %H:%M:%S")}
         payload.update(self.get_end_effector_status())
+        payload["waist_pose"] = self.get_waist_status()
         self.mqtt_client.publish(
             self.status_topic, json.dumps(payload, ensure_ascii=False), qos=0)
         return payload
@@ -431,32 +569,48 @@ class PoseController:
             print(f"[位姿] {side}臂 {'完成' if success else '失败'}")
             return success
     
-    def move_waist(self, offset):
-        """腰部运动（上下前后）"""
+    def move_waist(self, offset, speed=None):
+        """腰腿笛卡尔相对运动：offset=[前后X, 侧向Y, 上下Z]，单位米。"""
         with self._lock:
-            print(f"[位姿] 腰部: offset={offset}")
-            
-            start_l = self._find_pose(self.left_name)
-            start_r = self._find_pose(self.right_name)
-            
-            target_l = {
-                "position": [
-                    start_l["position"][0] + offset[0],
-                    start_l["position"][1] + offset[1],
-                    start_l["position"][2] + offset[2]
-                ],
-                "orientation": start_l["orientation"]
-            }
-            target_r = {
-                "position": [
-                    start_r["position"][0] + offset[0],
-                    start_r["position"][1] + offset[1],
-                    start_r["position"][2] + offset[2]
-                ],
-                "orientation": start_r["orientation"]
-            }
-            
-            return self.move_both_arms(target_l, target_r)
+            if not isinstance(offset, (list, tuple)) or len(offset) != 3:
+                raise ValueError("腰腿 offset 必须是 [前后, 侧向, 上下]")
+            forward, lateral, up = [float(value) for value in offset]
+            if abs(lateral) > 1e-9:
+                raise ValueError("腰腿当前只支持前后 X 和上下 Z，不支持侧向 Y")
+            current = self._get_current_waist_angles()
+            target, solved_pose = self._waist_inverse_kinematics(
+                current, forward, up)
+            velocity = self.waist_speed if speed is None else float(speed)
+            if not 0.02 <= velocity <= 0.50:
+                raise ValueError("腰腿关节速度必须在 0.02~0.50 rad/s")
+            print(
+                f"[位姿] 腰腿 X/Z: ({forward:+.3f}, {up:+.3f}) m, "
+                f"目标=({solved_pose['x']:.3f}, {solved_pose['z']:.3f}) m")
+            self.robot.move_waist_joint(target, [velocity] * 5)
+            print("[位姿] 腰腿运动完成")
+            return True
+
+    def move_waist_to_pose(self, pose, speed=None):
+        """腰腿绝对定位到保存的 x/y/z/rx/ry/rz 位姿。"""
+        with self._lock:
+            if not isinstance(pose, dict):
+                raise ValueError("腰腿定位目标必须是 x/y/z/rx/ry/rz 对象")
+            current = self._get_current_waist_angles()
+            target, solved_pose = self._solve_waist_target(
+                current,
+                float(pose.get("x", 0.0)), float(pose.get("z", 0.0)),
+                float(pose.get("ry", pose.get("pitch", 0.0))),
+                float(pose.get("rx", pose.get("roll", 0.0))),
+                float(pose.get("rz", pose.get("yaw", 0.0))))
+            velocity = self.waist_speed if speed is None else float(speed)
+            if not 0.02 <= velocity <= 0.50:
+                raise ValueError("腰腿关节速度必须在 0.02~0.50 rad/s")
+            print(
+                f"[位姿] 腰腿绝对定位: X={solved_pose['x']:.3f}, "
+                f"Z={solved_pose['z']:.3f}, RY={solved_pose['pitch']:.3f}")
+            self.robot.move_waist_joint(target, [velocity] * 5)
+            print("[位姿] 腰腿绝对定位完成")
+            return True
     
     @staticmethod
     def _recover_quat(data):

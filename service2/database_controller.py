@@ -36,6 +36,12 @@ class DatabaseController:
         "joint": "single_joint",
         "single_joint": "single_joint",
     }
+    POSITION_TYPE_ALIASES = {
+        "left": "left", "左手": "left",
+        "right": "right", "右手": "right",
+        "both": "both", "左右手": "both",
+        "waist": "waist", "腰部": "waist",
+    }
     WAIST_JOINT_KEYS = [
         "idx01_body_joint1", "idx02_body_joint2", "idx03_body_joint3",
         "idx04_body_joint4", "idx05_body_joint5",
@@ -145,17 +151,34 @@ class DatabaseController:
         self._mem_conn.backup(self._file_conn)
 
     @staticmethod
-    def _normalize_position_value(value):
+    def _normalize_position_value(value, ptype=None):
         """将末端姿态统一为 x/y/z/rx/ry/rz 六字段格式。"""
         if not isinstance(value, dict):
             raise ValueError("坐标姿态必须是 JSON 对象")
 
-        if "left" in value or "right" in value:
+        canonical_type = None
+        if ptype is not None:
+            canonical_type = DatabaseController._canonical_position_type(ptype)
+
+        if canonical_type == "waist":
+            result = {
+                "x": float(value.get("x", 0.0)),
+                "y": float(value.get("y", 0.0)),
+                "z": float(value.get("z", 0.0)),
+                "rx": float(value.get("rx", value.get("roll", 0.0))),
+                "ry": float(value.get("ry", value.get("pitch", 0.0))),
+                "rz": float(value.get("rz", value.get("yaw", 0.0))),
+            }
+            if not all(math.isfinite(component) for component in result.values()):
+                raise ValueError("腰部姿态包含非有限数值")
+            return result
+
+        if canonical_type == "both" or "left" in value or "right" in value:
             if not isinstance(value.get("left"), dict) or not isinstance(value.get("right"), dict):
                 raise ValueError("双臂坐标姿态必须同时包含 left/right")
             return {
-                "left": DatabaseController._normalize_position_value(value["left"]),
-                "right": DatabaseController._normalize_position_value(value["right"]),
+                "left": DatabaseController._normalize_position_value(value["left"], "left"),
+                "right": DatabaseController._normalize_position_value(value["right"], "right"),
             }
 
         position = value.get("position")
@@ -192,17 +215,21 @@ class DatabaseController:
     def _normalize_existing_positions(self):
         """迁移历史姿态记录，并同步到磁盘数据库。"""
         cur = self._mem_conn.cursor()
-        cur.execute("SELECT id,name,value FROM positions")
+        cur.execute("SELECT id,type,name,value FROM positions")
         updated = 0
-        for row_id, name, raw_value in cur.fetchall():
+        for row_id, ptype, name, raw_value in cur.fetchall():
             try:
-                normalized = self._normalize_position_value(json.loads(raw_value))
+                canonical_type = self._canonical_position_type(ptype)
+                normalized = self._normalize_position_value(
+                    json.loads(raw_value), canonical_type)
             except (TypeError, ValueError, json.JSONDecodeError) as exc:
                 print(f"[DB] 跳过无法规范化的位姿 {name}: {exc}")
                 continue
             normalized_json = json.dumps(normalized, ensure_ascii=False)
-            if json.loads(raw_value) != normalized:
-                cur.execute("UPDATE positions SET value=? WHERE id=?", (normalized_json, row_id))
+            if json.loads(raw_value) != normalized or ptype != canonical_type:
+                cur.execute(
+                    "UPDATE positions SET type=?,value=? WHERE id=?",
+                    (canonical_type, normalized_json, row_id))
                 updated += 1
         if updated:
             self._mem_conn.commit()
@@ -376,9 +403,17 @@ class DatabaseController:
     # ═══════════════════════════════════════════════════════
     #  坐标姿态
     # ═══════════════════════════════════════════════════════
+    @classmethod
+    def _canonical_position_type(cls, ptype):
+        canonical = cls.POSITION_TYPE_ALIASES.get(str(ptype))
+        if canonical is None:
+            raise ValueError(f"不支持的坐标姿态类型: {ptype}")
+        return canonical
+
     def add_positions(self, ptype, name, value):
         """新增坐标姿态（同类型同名已存在则失败）"""
-        normalized = self._normalize_position_value(value)
+        ptype = self._canonical_position_type(ptype)
+        normalized = self._normalize_position_value(value, ptype)
         with self._lock:
             cur = self._mem_conn.cursor()
             cur.execute("SELECT 1 FROM positions WHERE type=? AND name=?", (ptype, name))
@@ -393,7 +428,8 @@ class DatabaseController:
 
     def update_positions(self, ptype, name, value):
         """修改坐标姿态（不存在则失败）"""
-        normalized = self._normalize_position_value(value)
+        ptype = self._canonical_position_type(ptype)
+        normalized = self._normalize_position_value(value, ptype)
         with self._lock:
             cur = self._mem_conn.cursor()
             cur.execute("UPDATE positions SET value=? WHERE type=? AND name=?",
@@ -407,6 +443,7 @@ class DatabaseController:
 
     def delete_positions(self, ptype, name):
         """删除坐标姿态"""
+        ptype = self._canonical_position_type(ptype)
         with self._lock:
             cur = self._mem_conn.cursor()
             cur.execute("DELETE FROM positions WHERE type=? AND name=?", (ptype, name))
@@ -438,10 +475,10 @@ class DatabaseController:
         ptype, value = item["type"], item["value"]
         if ptype == "left":
             pos = [value.get("x", 0), value.get("y", 0), value.get("z", 0)]
-            return pc.move_left_arm(agibot_gdk, pos, self._recover_quat(value))
+            return pc.move_left_arm(pos, self._recover_quat(value))
         if ptype == "right":
             pos = [value.get("x", 0), value.get("y", 0), value.get("z", 0)]
-            return pc.move_right_arm(agibot_gdk, pos, self._recover_quat(value))
+            return pc.move_right_arm(pos, self._recover_quat(value))
         if ptype == "both":
             left = value.get("left", {})
             right = value.get("right", {})
@@ -449,9 +486,9 @@ class DatabaseController:
                            "orientation": self._recover_quat(left)}
             right_target = {"position": [right.get("x", 0), right.get("y", 0), right.get("z", 0)],
                             "orientation": self._recover_quat(right)}
-            return pc.move_both_arms(agibot_gdk, left_target, right_target)
+            return pc.move_both_arms(left_target, right_target)
         if ptype == "waist":
-            return pc.move_waist(agibot_gdk, value)
+            return pc.move_waist_to_pose(value)
         print(f"[DB] 未知位姿类型: {ptype}")
         return False
 

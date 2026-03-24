@@ -17,10 +17,14 @@ except ImportError:
     HAS_CV2 = False
 
 try:
-    from dt_apriltags import Detector
+    from pyapriltags import Detector
     HAS_APRILTAG = True
 except ImportError:
-    HAS_APRILTAG = False
+    try:
+        from dt_apriltags import Detector
+        HAS_APRILTAG = True
+    except ImportError:
+        HAS_APRILTAG = False
 
 
 class ApriltagController:
@@ -60,7 +64,7 @@ class ApriltagController:
     def init(self):
         """初始化 Apriltag 检测器"""
         if not HAS_APRILTAG:
-            print("[Apriltag] 未安装 pupil-apriltags")
+            print("[Apriltag] 未安装 pyapriltags/dt-apriltags")
             return False
         
         try:

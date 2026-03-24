@@ -61,6 +61,36 @@ export default {
                     </div>
                 </div>
             </div>
+
+            <!-- 腰腿：基座坐标系下 X 前后、Z 上下 -->
+            <div class="tc-hand-group tc-waist-group">
+                <h6 class="tc-hand-title">腰腿</h6>
+                <div class="coord-row waist-coord-row">
+                    <span class="axis-label">X</span>
+                    <button class="minus" aria-label="腰腿向后"
+                            @click="moveWaist('forward', -stepSize)">
+                        <ui-icon name="down"></ui-icon>后
+                    </button>
+                    <span class="val">{{ format(waist.x) }}</span>
+                    <button class="plus" aria-label="腰腿向前"
+                            @click="moveWaist('forward', stepSize)">
+                        <ui-icon name="up"></ui-icon>前
+                    </button>
+                </div>
+                <div class="coord-row waist-coord-row">
+                    <span class="axis-label">Z</span>
+                    <button class="minus" aria-label="腰腿向下"
+                            @click="moveWaist('up', -stepSize)">
+                        <ui-icon name="down"></ui-icon>下
+                    </button>
+                    <span class="val">{{ format(waist.z) }}</span>
+                    <button class="plus" aria-label="腰腿向上"
+                            @click="moveWaist('up', stepSize)">
+                        <ui-icon name="up"></ui-icon>上
+                    </button>
+                </div>
+                <p class="tc-waist-note">基座坐标系 · 保持上身俯仰姿态</p>
+            </div>
         </div>
         </div>
 
@@ -110,7 +140,7 @@ export default {
         <!-- 保存弹窗 -->
         <div v-if="showSaveDialog" class="save-overlay" @click.self="showSaveDialog = false">
             <div class="save-dialog">
-                <h6 style="color:#00499d; margin-bottom:16px;">保存末端位姿</h6>
+                <h6 style="color:#00499d; margin-bottom:16px;">保存姿态变量</h6>
 
                 <div class="form-row">
                     <label>名称</label>
@@ -121,8 +151,8 @@ export default {
                 <div style="margin-bottom:16px;">
                     <label style="display:block; color:#606266; font-size:14px; margin-bottom:8px;">类型</label>
                     <div class="radio-group">
-                        <label v-for="t in saveTypes" :key="t">
-                            <input type="radio" :value="t" v-model="saveType" /> {{ t }}
+                        <label v-for="t in saveTypes" :key="t.value">
+                            <input type="radio" :value="t.value" v-model="saveType" /> {{ t.label }}
                         </label>
                     </div>
                 </div>
@@ -142,6 +172,7 @@ export default {
             axes: ['x', 'y', 'z', 'rx', 'ry', 'rz'],
             left:  { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 },
             right: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 },
+            waist: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 },
             leftGripper: -0.75,
             rightGripper: -0.75,
             // 坐标系
@@ -151,7 +182,12 @@ export default {
             showSaveDialog: false,
             saveName: '',
             saveType: 'both',
-            saveTypes: ['left', 'right', 'both'],
+            saveTypes: [
+                { value: 'left', label: '左手' },
+                { value: 'right', label: '右手' },
+                { value: 'both', label: '左右手' },
+                { value: 'waist', label: '腰部' },
+            ],
             _unwatch: null
         };
     },
@@ -176,6 +212,12 @@ export default {
             const key = side === 'left' ? 'l' + axis : 'r' + axis;
             const data = { [key]: value };
             mqttClient.publishCommand('offset_move', data);
+        },
+        // 腰腿平面运动：forward 对应基座 X，up 对应基座 Z，单位米。
+        moveWaist(axis, delta) {
+            const data = { forward: 0, up: 0 };
+            data[axis] = Number(delta);
+            mqttClient.publishCommand('waist_move', data);
         },
         // 设置夹爪开合度（滑动条 @change 触发）
         setGripper(side, pos) {
@@ -209,6 +251,14 @@ export default {
                 this.right.ry = o[1] || 0;
                 this.right.rz = o[2] || 0;
             }
+            if (status.waist_pose) {
+                this.waist.x = Number(status.waist_pose.x) || 0;
+                this.waist.y = Number(status.waist_pose.y) || 0;
+                this.waist.z = Number(status.waist_pose.z) || 0;
+                this.waist.rx = Number(status.waist_pose.rx) || 0;
+                this.waist.ry = Number(status.waist_pose.ry ?? status.waist_pose.pitch) || 0;
+                this.waist.rz = Number(status.waist_pose.rz) || 0;
+            }
         },
         // 收集当前末端位姿
         collectData() {
@@ -216,6 +266,8 @@ export default {
                 return { ...this.left };
             } else if (this.saveType === 'right') {
                 return { ...this.right };
+            } else if (this.saveType === 'waist') {
+                return { ...this.waist };
             } else {
                 // both
                 return {

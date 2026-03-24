@@ -9,7 +9,7 @@
 GDK 对象的控制器负责，并兼容旧 `web/` 使用的主题：
 
 - `JointController`：5 Hz 发布 `/humanoid/status/data` 的 `joints` 片段。
-- `PoseController`：5 Hz 发布 `left_ee`、`right_ee` 片段。
+- `PoseController`：5 Hz 发布 `left_ee`、`right_ee`、`waist_pose` 片段。
 - `ChassisController`：5 Hz 发布 `chassis`，按需向
   `/humanoid/status/cloud` 发布前后激光点云。
 - `EndEffectorController`：5 Hz 发布 `grippers` 片段。
@@ -19,7 +19,7 @@ GDK 对象的控制器负责，并兼容旧 `web/` 使用的主题：
 旧 `web/js/index.js` 合并这些状态片段，因此关节、末端和底盘状态不会互相覆盖。
 `web/` 是正式网页入口；`web2/` 不再作为主界面。
 
-`main.py` 还提供旧网页兼容主题：
+`g2.py` 还提供旧网页兼容主题：
 
 - 关节/位姿数据：`/humanoid/joints/save` → `/humanoid/joints/data`
 - 坐标点位：`/humanoid/positions/control` → `/humanoid/positions/data`
@@ -28,14 +28,18 @@ GDK 对象的控制器负责，并兼容旧 `web/` 使用的主题：
 - 相机、关节、底盘、夹爪、TTS 保持旧 web 的原主题协议。
 
 程序列表、执行和单步调试由 `runtime2/run.py` 独立服务提供，
-不在 `serivces2/main.py` 中复制调试器。
+不在 `service2/g2.py` 中复制调试器。
 
 ### 启动旧 web 整套服务
 
 ```bash
 cd /data/wxf/mbu0917
-source /home/agi/app/gdk/scripts/env.sh /home/agi/app
-python3 serivces2/main.py
+source /home/agi/app/env.sh /home/agi/app
+python3 service2/g2.py
+
+# 独立 Apriltag 服务（不加载 GDK）
+PYTHONPATH=/home/agi/.local/lib/python3.10/site-packages \
+  .venv-apriltag/bin/python service2/apriltag.py
 
 # 另一终端：程序调试服务
 python3 runtime2/run.py
@@ -60,6 +64,9 @@ python3 -m http.server 8004 -d web
 | `interaction_controller.py` | 控制器 | TTS 语音输出 |
 | `camera_controller.py` | 控制器 | 头部彩色/深度、左右手腕相机单帧读取与双文件拍照保存 |
 | `apriltag_controller.py` | 控制器 | Apriltag 图片识别解析 |
+| `g2.py` | 服务入口 | GDK 控制、状态、相机和数据库 MQTT 服务；不加载 Apriltag |
+| `apriltag.py` | 服务入口 | 使用 `.venv-apriltag` 的独立 Apriltag MQTT 服务 |
+| `run.sh` | 自启动管理 | 启动 g2、Apriltag、runtime 和 web 四个进程 |
 | `README.md` | 文档 | 本说明 |
 
 ## 整体架构
@@ -77,6 +84,7 @@ python3 -m http.server 8004 -d web
 - 构造函数：`DatabaseController(db_path, joint_controller=None, pose_controller=None, chassis_controller=None)`
 - 核心方法 `init()`：从文件加载到内存 SQLite（`:memory:`），写操作后 `_sync_to_file()` 同步回文件。
 - 数据表：`joints`、`positions`、`map_points`；每类数据实现 增(add)/删(delete)/改(update)/读取所有(get_all)/运动到位置(move)，无查询功能，数据一律按名称字符排序。
+- 姿态变量 `positions` 统一分为四类：`left`（左手）、`right`（右手）、`both`（左右手）、`waist`（腰部）。腰部数据统一保存为 `x/y/z/rx/ry/rz`。
 - `joints` 表字段为 `id/type/name/joint_name/value`。类型限定为 `whole_body`（全身22关节）、`left_arm`（左手7关节）、`right_arm`（右手7关节）和 `single_joint`（单轴）；仅单轴变量填写 `joint_name`。
 - 主要方法（以关节为例，位姿/地图点位同构）：
   - `add_joints(type, name, value, joint_name=None)` / `update_joints(type, name, value, joint_name=None)` / `delete_joints(type, name)`
@@ -118,15 +126,33 @@ python3 -m http.server 8004 -d web
 ### 4. 位姿控制器 `pose_controller.py`
 
 - 构造函数：`PoseController(robot, mqtt_client, topic_response, topic_done)`（不引用数据库控制器）
-- 控制左右手末端在世界坐标系的绝对位姿；支持左右手/左手/右手/腰部（上下前后）4 种运动方式。
+- 控制左右手末端位姿，以及腰腿在 `base_link` 坐标系内的 X 前后、Z 上下运动。
+- 腰部姿态变量支持绝对定位：读取当前五个腰腿关节角，按 URDF 链对保存的 `x/z/rx/ry/rz` 做解析逆解，校验工作空间和关节限位后执行腰部关节运动。
 - 数学工具：`slerp`（四元数球面插值）、`euler_to_quaternion`、`quaternion_multiply`、`distance`。
+- 腰腿几何来自 `web/meshes/model.urdf` 的 `base_link -> body_link5` 串联链。等价改进 DH/URDF 参数如下：
+
+  | 关节 | 关节轴 | URDF 原点 xyz (m) | 限位 (rad) |
+  |---|---|---|---|
+  | `idx01_body_joint1` | Y | `[0.102, 0, 0.144]` | `[-1.0821, 0]` |
+  | `idx02_body_joint2` | Y | `[0, 0, 0.360]` | `[0, 2.6529]` |
+  | `idx03_body_joint3` | Y | `[0, 0, 0.380]` | `[-1.919, 1.117]` |
+  | `idx04_body_joint4` | X | `[0, 0, 0]` | `[-0.4363, 0.4363]` |
+  | `idx05_body_joint5` | Z | `[0, 0, 0.149]` | `[-3.0456, 3.0456]` |
+
+  前三轴构成 X/Z 平面 3R 链。控制器从 GDK 读取五轴当前角度，按 URDF 原点变换做正解；逆解时联动前三轴并约束
+  `q1 + q2 + q3` 保持不变，因此上身俯仰不随平移改变，关节 4/5 保持当前角度。目标还会经过可达域、URDF 限位、
+  单次笛卡尔步长（最大 0.03 m）、单次关节变化（最大 0.20 rad）和速度（0.02~0.50 rad/s）检查。
 - 主要方法：
-  - `move_left_arm(agibot_gdk, position, orientation)` / `move_right_arm(...)`
-  - `move_both_arms(agibot_gdk, left_target, right_target)`
-  - `move_relative(agibot_gdk, side, offset, rotation)`
-  - `move_waist(agibot_gdk, offset)` — 通过双臂联动实现腰部上下前后
+  - `move_left_arm(position, orientation)` / `move_right_arm(...)`
+  - `move_both_arms(left_target, right_target)`
+  - `move_relative(side, offset, rotation)`
+  - `move_waist(offset, speed=None)` — `offset=[X前后, Y侧向, Z上下]`（米），当前要求 Y 必须为 0
   - `get_current_pose(side)`
-- 内部辅助：`_find_pose`、`_n_steps`、`_plan`、`_send_trajectory`、`_send_dual_trajectory`、`_hold_at_pose`、`_recover_quat`。
+- 腰腿 MQTT：新版 `/humanoid/pose/request/` 使用
+  `{"cmd":"waist","offset":[0.01,0,0],"speed":0.2}`；旧网页通过
+  `/humanoid/commands/data` 使用 `{"command":"waist_move","data":{"forward":0.01,"up":0}}`。
+- 内部辅助：`_waist_forward_kinematics`、`_waist_inverse_kinematics`、`_get_current_waist_angles`、
+  `_find_pose`、`_n_steps`、`_plan`、`_send_trajectory`、`_send_dual_trajectory`、`_hold_at_pose`、`_recover_quat`。
 
 ### 5. 末端控制器 `end_effector_controller.py`
 
@@ -156,9 +182,10 @@ python3 -m http.server 8004 -d web
 ### 8. Apriltag 图片解析控制器 `apriltag_controller.py`
 
 - 构造函数：`ApriltagController(mqtt_client, topic_response, image_save_dir)`
-- 对摄像头控制器保存的图片做识别解析；**使用独立虚拟环境 `.venv-apriltag`（不依赖 GDK）**。
+- 对摄像头控制器保存的图片做识别解析；`apriltag.py` 使用独立虚拟环境 `.venv-apriltag` 自启动，不加载 GDK。
+- MQTT：订阅 `/humanoid/apriltag/request/`，响应 `/humanoid/apriltag/response/`。`detect_head` 默认识别 `images/kHeadColor-latest.jpg`。
 - 主要方法：
-  - `init()` — 初始化 `dt_apriltags` 检测器（tag36h11）
+  - `init()` — 初始化 `pyapriltags` 检测器（tag36h11）
   - `detect_image(image)` / `detect_file(filepath)` / `detect_saved_image(filename)`
   - 静态辅助：`_rotmat_to_quat(R)`
 
@@ -208,13 +235,14 @@ python3 -m http.server 8004 -d web
 | `test_maptest_web.sh` | Playwright 真实数据读取测试 | 是（不自动执行运动） |
 | `test_joint_controller_head.py` | 头部关节 | 否（需人工确认） |
 | `test_joint_controller_waist.py` | 腰部关节 | 否（需人工确认） |
+| `test_waist_position_variable.py` | 已保存腰部姿态变量定位 | 否（需人工确认） |
 | `test_joint_controller_left_arm.py` | 左臂关节 | 否（需人工确认） |
 | `test_end_effector_controller.py` | 末端爪子 | 否（需人工确认） |
 | `test_camera_controller.py` | 摄像头 | 是（需 GDK 环境） |
 | `camera.html` / `camera.js` | 四路真实摄像头集成测试页面 | 是（需服务层和真实相机） |
 | `test_camera_web.sh` | Playwright 四路摄像头按钮测试 | 是（不涉及机器人运动） |
 | `test_interaction_controller.py` | TTS | 是（需 GDK 环境） |
-| `test_apriltag_controller.py` | Apriltag | 是（.venv-apriltag 环境） |
+| `test_head_rgb_apriltag.py` | 拍摄当前头部 RGB 并通过 MQTT 识别 Apriltag | 是（不涉及运动） |
 
 ### 测试要求（来自 `agents.md`）
 
@@ -239,9 +267,9 @@ python3 test/services2/test_chassis_controller_stop.py
 # Playwright 只读取真实数据，不点击运动和数据库写入按钮
 bash test/services2/test_maptest_web.sh
 
-# Apriltag 测试（使用独立虚拟环境）
-source .venv-apriltag/bin/activate
-python3 test/services2/test_apriltag_controller.py
+# Apriltag 测试（先拍摄当前头部 RGB，再请求独立服务识别）
+PYTHONPATH=/home/agi/.local/lib/python3.10/site-packages \
+  .venv-apriltag/bin/python test/services2/test_head_rgb_apriltag.py
 ```
 
 ## MQTT 命令示例
@@ -264,13 +292,13 @@ mosquitto_pub -t /humanoid/camera/request/ -m '{"cmd":"capture","camera":"kHeadC
 
 | 模块 | 环境 |
 |------|------|
-| 底盘/关节/位姿/末端/摄像头/交互控制器 | `source ~/app/env.bash`（GDK 环境） |
+| 底盘/关节/位姿/末端/摄像头/交互控制器 | `source /home/agi/app/env.sh /home/agi/app`（GDK 环境） |
 | 数据库控制器 | 默认系统 Python |
 | Apriltag 控制器 | `source .venv-apriltag/bin/activate` |
 
 ## 注意事项
 
 1. **安全第一**：涉及机器人运动的测试，执行前务必确认周围环境安全。
-2. **环境激活**：GDK 控制器需先激活环境 `source ~/app/env.bash`。
-3. **Apriltag 环境**：Apriltag 控制器需独立环境 `source .venv-apriltag/bin/activate`，且不依赖 GDK。
+2. **环境激活**：GDK 服务需先执行 `source /home/agi/app/env.sh /home/agi/app`。
+3. **Apriltag 环境**：Apriltag 服务由 `.venv-apriltag/bin/python` 启动，依赖通过专用 `PYTHONPATH` 提供，不加载 GDK。
 4. **MQTT Broker**：确保 MQTT Broker（如 mosquitto）已启动。

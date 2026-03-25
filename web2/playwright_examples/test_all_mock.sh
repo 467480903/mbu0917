@@ -11,4 +11,6 @@ do
   bash "${example_dir}/${example}"
 done
 
-echo "[PASS] 9 个模块的 Playwright 模拟测试全部完成"
+bash "${example_dir}/test_runtime_debug.sh"
+
+echo "[PASS] 9 个服务模块和代码单步调试页面的 Playwright 模拟测试全部完成"

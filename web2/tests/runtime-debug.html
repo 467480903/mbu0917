@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>代码单步调试测试</title>
+</head>
+<body>
+  <main>
+    <h1>代码单步调试测试</h1>
+    <p id="mode"></p>
+
+    <fieldset>
+      <legend>MQTT 连接</legend>
+      <label>Broker <input id="broker"></label>
+      <label>WebSocket 端口 <input id="port" value="9001" size="6"></label>
+      <button id="connect" type="button">连接</button>
+      <span id="connection-status">未连接</span>
+    </fieldset>
+
+    <h2>程序文件</h2>
+    <p>
+      <button id="read-files" type="button">读取程序列表</button>
+      <select id="programs" aria-label="程序文件"></select>
+      <button id="copy" type="button">复制到 main.py</button>
+      <button id="run-selected" type="button">执行选中程序</button>
+      <button id="debug-selected" type="button">单步调试选中程序</button>
+    </p>
+
+    <h2>main.py</h2>
+    <p><button id="read-code" type="button">读取 main.py</button></p>
+    <pre id="source-code">尚未读取</pre>
+
+    <h2>单步执行</h2>
+    <p>
+      <button id="debug" type="button">开始单步调试</button>
+      <button id="next" type="button">下一步</button>
+      <button id="stop" type="button">停止</button>
+    </p>
+    <p>状态：<span id="debug-status">尚未执行</span></p>
+    <p>当前行：<span id="current-line">-</span></p>
+    <pre id="current-code"></pre>
+
+    <h2>MQTT 日志</h2>
+    <pre id="log"></pre>
+  </main>
+
+  <script src="../vendor/paho-mqtt.min.js"></script>
+  <script type="module" src="./runtime-debug.js"></script>
+</body>
+</html>

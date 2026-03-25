@@ -40,6 +40,7 @@ bash test_camera.sh
 bash test_apriltag.sh
 bash test_database.sh
 bash test_sync.sh
+bash test_runtime_debug.sh
 ```
 
 默认使用模拟 MQTT，测试结束后保留浏览器。默认每个步骤暂停 2 秒，便于观察。
@@ -62,3 +63,5 @@ PLAYWRIGHT_LIVE=1 bash test_sync.sh
 ```
 
 底盘、关节、位姿和夹爪示例在脚本层面禁止自动真机联调。需要真机测试时，请在可见页面中人工核对参数并确认环境安全。
+
+`test_runtime_debug.sh` 使用模拟 MQTT，逐步验证程序列表、复制到 `main.py`、读取源码和 trace 单步前进，不会执行机器人程序。

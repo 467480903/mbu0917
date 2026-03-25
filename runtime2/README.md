@@ -31,7 +31,7 @@ with G2() as 机器人:
 
 ## 中文 API
 
-- `底盘相对运动(前后, 左右, 转角)`
+- `底盘相对运动(前后=0, 左右=0, 转角=0)`，未传入的分量不运动
 - `底盘地图点运动(点位序号)`
 - `底盘相对运动带速度(前后, 左右, 转角, 线速度, 角速度)`
 - `夹爪(左夹爪=None, 右夹爪=None)`，位置范围 `0.0~1.0`
@@ -42,6 +42,11 @@ with G2() as 机器人:
 - `左手坐标姿态运动(变量, 末端线速度=None, 末端角速度=None)`
 - `右手坐标姿态运动(变量, 末端线速度=None, 末端角速度=None)`
 - `单关节运动(关节名称, 目标角度, 角速度=None)`
+- `单关节相对运动(关节名称, 递增量, 角速度=None)`
+- `读取当前全身所有关节角()`，返回 `{关节名称: 角度弧度值}`
+- `读取当前左手末端坐标姿态()`，返回 `position` 和 `orientation`
+- `读取当前右手末端坐标姿态()`，返回 `position` 和 `orientation`
+- `头部全局相机拍照()`，保存到 `images/` 并返回绝对路径
 - `语音输出(文本内容)`
 - `同步数据读取(变量名称)`
 - `同步数据写入(变量名称, 值)`
@@ -66,3 +71,29 @@ python3 test/runtime2/test_12_tts.py
 `.venv-apriltag/bin/python`。
 
 每个测试文件直接创建 `G2` 并调用一个中文接口，不再使用模拟 MQTT，也不包含交互式确认；不要用 `unittest discover` 批量执行这些脚本。
+
+## 用户程序管理与单步调试
+
+启动独立的程序管理服务：
+
+```bash
+cd /data/wxf/mbu0917
+python3 runtime2/run.py
+```
+
+服务订阅 `/humanoid/programs/control`，支持 `read_files`、`copy`、`codes`、`run`、`debug`、`next` 和 `stop` 命令。它通过以下主题返回结果：
+
+- `/humanoid/programs/files`：`programs/` 下的 `.py` 文件列表
+- `/humanoid/programs/codes`：当前 `main.py` 源码
+- `/humanoid/programs/step`：trace 当前行号和源码
+- `/humanoid/programs/status`：复制、运行、完成、停止或错误状态
+
+`copy` 只接受 `programs/` 目录中的单个 `.py` 文件名，并以原子替换方式覆盖 `runtime2/main.py`。`debug` 只跟踪该 `main.py`，每遇到一行便等待 `next`；`stop` 可结束等待中的调试。
+
+安全的调试示例位于 `runtime2/programs/debug_demo.py`。网页独立测试页为：
+
+```text
+http://10.42.1.101:8003/tests/runtime-debug.html
+```
+
+页面默认使用模拟 MQTT，不会执行程序；添加 `?live=1` 才会连接真实 MQTT。

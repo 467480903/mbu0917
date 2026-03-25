@@ -95,6 +95,24 @@ class JointController:
         except Exception as e:
             print(f"[关节] 读取关节角失败: {e}")
             return [0.0] * len(keys)
+
+    def get_current_angles(self):
+        """读取全部关节当前角度，返回关节名到弧度值的映射。"""
+        states = self.robot.get_joint_states()
+        if not isinstance(states, dict) or not isinstance(states.get("states"), list):
+            raise RuntimeError("GDK 返回的关节状态格式不正确")
+
+        angles = {}
+        for state in states["states"]:
+            name = state.get("name")
+            if not name:
+                continue
+            value = state.get("position", state.get("motor_position"))
+            if value is not None:
+                angles[str(name)] = float(value)
+        if not angles:
+            raise RuntimeError("未读取到关节角")
+        return angles
     
     # ── 运动控制（不嵌套，直接调用 GDK）────────────────────
     
@@ -246,15 +264,18 @@ class JointController:
         speed : float
             速度
         """
-        # 读取当前角度
-        current_angles = {}
         try:
             states = self.robot.get_joint_states()
             current_angles = {s['name']: s['motor_position'] for s in states['states']}
-        except Exception:
-            pass
-        
-        current = current_angles.get(name, 0.0)
+        except Exception as error:
+            print(f"[关节] 读取当前角度失败: {error}")
+            return False
+
+        if name not in current_angles:
+            print(f"[关节] 未找到关节状态: {name}")
+            return False
+
+        current = current_angles[name]
         
         if value is not None:
             target = float(value)
@@ -266,36 +287,56 @@ class JointController:
         
         print(f"[关节] 单关节 {name}: {current:.4f} → {target:.4f}")
         
-        # 根据关节名前缀选择接口
-        if name.startswith("idx1"):  # head
+        velocity = float(speed) if speed is not None else None
+
+        # 根据关节分组选择接口
+        if name in self.head_joint_keys:
             keys = self.head_joint_keys
-            pos = [current_angles.get(k, 0.0) for k in keys]
-            idx = keys.index(name) if name in keys else 0
+            if any(key not in current_angles for key in keys):
+                print("[关节] 头部关节状态不完整")
+                return False
+            pos = [current_angles[k] for k in keys]
+            idx = keys.index(name)
             pos[idx] = target
-            self.robot.move_head_joint(pos, [self.head_speed] * 3)
+            joint_speed = self.head_speed if velocity is None else velocity
+            self.robot.move_head_joint(pos, [joint_speed] * 3)
         
-        elif name.startswith("idx0"):  # waist
+        elif name in self.waist_joint_keys:
             keys = self.waist_joint_keys
-            pos = [current_angles.get(k, 0.0) for k in keys]
-            idx = keys.index(name) if name in keys else 0
+            if any(key not in current_angles for key in keys):
+                print("[关节] 腰部关节状态不完整")
+                return False
+            pos = [current_angles[k] for k in keys]
+            idx = keys.index(name)
             pos[idx] = target
-            self.robot.move_waist_joint(pos, [self.waist_speed] * 5)
+            joint_speed = self.waist_speed if velocity is None else velocity
+            self.robot.move_waist_joint(pos, [joint_speed] * 5)
         
-        elif name.startswith("idx2"):  # left arm
+        elif name in self.left_arm_joint_keys:
             keys = self.left_arm_joint_keys
-            left = [current_angles.get(k, 0.0) for k in keys]
-            idx = keys.index(name) if name in keys else 0
+            arm_keys = self.left_arm_joint_keys + self.right_arm_joint_keys
+            if any(key not in current_angles for key in arm_keys):
+                print("[关节] 双臂关节状态不完整")
+                return False
+            left = [current_angles[k] for k in keys]
+            idx = keys.index(name)
             left[idx] = target
-            right = [current_angles.get(k, 0.0) for k in self.right_arm_joint_keys]
-            self.robot.move_arm_joint(left + right, [self.arm_speed] * 14, 2)
+            right = [current_angles[k] for k in self.right_arm_joint_keys]
+            joint_speed = self.arm_speed if velocity is None else velocity
+            self.robot.move_arm_joint(left + right, [joint_speed] * 14, 2)
         
-        elif name.startswith("idx6"):  # right arm
+        elif name in self.right_arm_joint_keys:
             keys = self.right_arm_joint_keys
-            right = [current_angles.get(k, 0.0) for k in keys]
-            idx = keys.index(name) if name in keys else 0
+            arm_keys = self.left_arm_joint_keys + self.right_arm_joint_keys
+            if any(key not in current_angles for key in arm_keys):
+                print("[关节] 双臂关节状态不完整")
+                return False
+            right = [current_angles[k] for k in keys]
+            idx = keys.index(name)
             right[idx] = target
-            left = [current_angles.get(k, 0.0) for k in self.left_arm_joint_keys]
-            self.robot.move_arm_joint(left + right, [self.arm_speed] * 14, 2)
+            left = [current_angles[k] for k in self.left_arm_joint_keys]
+            joint_speed = self.arm_speed if velocity is None else velocity
+            self.robot.move_arm_joint(left + right, [joint_speed] * 14, 2)
         
         else:
             print(f"[关节] 未知关节名: {name}")

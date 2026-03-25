@@ -42,6 +42,8 @@ class G2:
     EE_RESPONSE = "/humanoid/ee/response/"
     TTS_REQUEST = "/humanoid/tts/request/"
     TTS_RESPONSE = "/humanoid/tts/response/"
+    CAMERA_REQUEST = "/humanoid/camera/request/"
+    CAMERA_RESPONSE = "/humanoid/camera/response/"
     DB_REQUEST = "/humanoid/db/request/"
     DB_RESPONSE = "/humanoid/db/response/"
     SYNC_REQUEST = "/humanoid/sync/request/"
@@ -94,7 +96,7 @@ class G2:
             return
         for topic in (
             self.BASE_RESPONSE, self.JOINT_RESPONSE, self.POSE_RESPONSE,
-            self.EE_RESPONSE, self.TTS_RESPONSE, self.DB_RESPONSE,
+            self.EE_RESPONSE, self.TTS_RESPONSE, self.CAMERA_RESPONSE, self.DB_RESPONSE,
             self.SYNC_RESPONSE, self.SYNC_DATA, self.DONE,
         ):
             client.subscribe(topic, qos=2)
@@ -183,7 +185,8 @@ class G2:
             raise ValueError("旋转量必须包含 3 个角度分量")
         return [cls._validate_number("偏移量", item) for item in position], [cls._validate_number("旋转量", item) for item in rotation]
 
-    def 底盘相对运动(self, 前后, 左右, 转角, timeout=None):
+    def 底盘相对运动(self, 前后=0, 左右=0, 转角=0, timeout=None):
+        """执行底盘相对运动；未传入的运动分量按 0 处理。"""
         payload = {"cmd": "relative", "x": self._validate_number("前后", 前后),
                    "y": self._validate_number("左右", 左右), "rotate": self._validate_number("转角", 转角)}
         return self._wait_motion_done(self.BASE_REQUEST, payload, "base", timeout)
@@ -276,6 +279,45 @@ class G2:
         if 角速度 is not None:
             payload["speed"] = self._validate_number("角速度", 角速度)
         return self._wait_motion_done(self.JOINT_REQUEST, payload, "joint", timeout)
+
+    def 单关节相对运动(self, 关节名称, 递增量, 角速度=None, timeout=None):
+        """按当前关节角增加指定弧度，并等待关节运动完成反馈。"""
+        payload = {"cmd": "single_joint", "name": str(关节名称),
+                   "offset": self._validate_number("递增量", 递增量)}
+        if 角速度 is not None:
+            payload["speed"] = self._validate_number("角速度", 角速度)
+        return self._wait_motion_done(self.JOINT_REQUEST, payload, "joint", timeout)
+
+    def 读取当前全身所有关节角(self, timeout=None):
+        """读取全部关节当前角度，返回 ``{关节名称: 角度(弧度)}``。"""
+        response = self._publish_and_wait(
+            self.JOINT_REQUEST, {"cmd": "get_current_angles"},
+            {self.JOINT_RESPONSE}, "get_current_angles", timeout=timeout,
+        )
+        return response.get("result", {})
+
+    def _read_current_end_pose(self, side, timeout=None):
+        response = self._publish_and_wait(
+            self.POSE_REQUEST, {"cmd": "get_current_pose", "side": side},
+            {self.POSE_RESPONSE}, "get_current_pose", timeout=timeout,
+        )
+        return response.get("result")
+
+    def 读取当前左手末端坐标姿态(self, timeout=None):
+        """返回左手末端的位置和四元数姿态。"""
+        return self._read_current_end_pose("left", timeout)
+
+    def 读取当前右手末端坐标姿态(self, timeout=None):
+        """返回右手末端的位置和四元数姿态。"""
+        return self._read_current_end_pose("right", timeout)
+
+    def 头部全局相机拍照(self, timeout=None):
+        """驱动头部彩色全局相机拍照，返回图片的绝对保存路径。"""
+        response = self._publish_and_wait(
+            self.CAMERA_REQUEST, {"cmd": "capture", "camera": "kHeadColor"},
+            {self.CAMERA_RESPONSE}, "capture", timeout=timeout,
+        )
+        return response.get("path") or response.get("result")
 
     def 语音输出(self, 文本内容):
         text = str(文本内容).strip()

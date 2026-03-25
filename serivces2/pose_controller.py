@@ -153,8 +153,14 @@ class PoseController:
     
     def get_current_pose(self, side):
         """获取当前末端位姿"""
+        if side not in ("left", "right"):
+            raise ValueError(f"未知末端侧别: {side}")
         name = self.left_name if side == "left" else self.right_name
-        return self._find_pose(name)
+        pose = self._find_pose(name)
+        return {
+            "position": [float(value) for value in pose["position"]],
+            "orientation": [float(value) for value in pose["orientation"]],
+        }
     
     # ── 运动执行（不嵌套，直接调用 GDK）────────────────────
     

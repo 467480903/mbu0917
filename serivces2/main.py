@@ -236,6 +236,10 @@ class ServiceApplication:
     def _handle_joint(self, payload):
         cmd = payload.get("cmd")
         controller = self.controllers["joint"]
+        if cmd == "get_current_angles":
+            result = controller.get_current_angles()
+            self._response("joint", payload, True, result=result)
+            return
         self._response("joint", payload)
         methods = {
             "head": lambda: controller.move_head(payload["joints"], payload.get("speed")),
@@ -256,6 +260,10 @@ class ServiceApplication:
     def _handle_pose(self, payload):
         cmd = payload.get("cmd")
         controller = self.controllers["pose"]
+        if cmd == "get_current_pose":
+            result = controller.get_current_pose(payload["side"])
+            self._response("pose", payload, True, side=payload["side"], result=result)
+            return
         self._response("pose", payload)
         if cmd == "relative":
             result = controller.move_relative(
@@ -313,7 +321,10 @@ class ServiceApplication:
             result = controller.get_image_base64(payload["camera"])
         else:
             raise ValueError(f"未知相机命令: {cmd}")
-        self._response("camera", payload, result is not None, result=result)
+        extra = {"result": result}
+        if cmd == "capture" and result is not None:
+            extra["path"] = os.path.join(controller.image_save_dir, result)
+        self._response("camera", payload, result is not None, **extra)
 
     def _handle_apriltag(self, payload):
         cmd = payload.get("cmd")

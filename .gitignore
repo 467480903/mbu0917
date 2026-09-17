@@ -1,0 +1,11 @@
+services/logs/
+services/__pycache__/
+services/python3.*
+runtime/__pycache__/
+python3.*
+*.pyc
+lerobot/__pycache__/
+dds_view.*
+services/scene_control.*
+__pycache__/
+images/

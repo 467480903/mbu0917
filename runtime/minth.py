@@ -8,22 +8,22 @@ Minth 机器人控制类库
 用法：
     from minth import Minth
 
-    robot = Minth.G2()
-    robot.GO(9)                 # 导航到地图点位 9
-    robot.WBC("hold")           # 执行全身关节动作 hold.json
-    robot.ARMS("hold")          # 执行双臂关节动作 arms/hold.json
-    robot.TTS("你好")           # 语音播报
-    robot.REL({"x": 0.3})       # 底盘前进 0.3 米
-    robot.OFFSET({"lx": 20})    # 左末端相对移动 20mm
-    robot.GRIPPER({"left": 0.5, "right": 0.5})
-    robot.YOLO("7.14.pt")               # YOLO 目标检测（使用服务端默认 IP）
-    robot.YOLO("wxf.pt")                # 使用 wxf.pt 模型检测
-    robot.YOLO("wxf.pt", "10.2.236.7")  # 指定自定义 YOLO 服务端 IP
-    robot.CHASSIS_CORRECT()     # 根据 detect.json 纠正底盘水平偏移
-    robot.JOINT("idx11_head_joint1", offset=0.01)   # 单关节增量微调
-    robot.JOINT("idx11_head_joint1", value=0.0)     # 单关节运动到指定角度
-    robot.WAIST_CORRECT()       # 根据 detect.json 的 angle_rad 纠正腰部旋转
-    robot.close()
+    G2 = Minth.G2()
+    G2.GO(9)                 # 导航到地图点位 9
+    G2.WBC("hold")           # 执行全身关节动作 hold.json
+    G2.ARMS("hold")          # 执行双臂关节动作 arms/hold.json
+    G2.TTS("你好")           # 语音播报
+    G2.REL({"x": 0.3})       # 底盘前进 0.3 米
+    G2.OFFSET({"lx": 20})    # 左末端相对移动 20mm
+    G2.GRIPPER({"left": 0.5, "right": 0.5})
+    G2.YOLO("7.14.pt")               # YOLO 目标检测（使用服务端默认 IP）
+    G2.YOLO("wxf.pt")                # 使用 wxf.pt 模型检测
+    G2.YOLO("wxf.pt", "10.2.236.7")  # 指定自定义 YOLO 服务端 IP
+    G2.CHASSIS_CORRECT()     # 根据 detect.json 纠正底盘水平偏移
+    G2.JOINT("idx11_head_joint1", offset=0.01)   # 单关节增量微调
+    G2.JOINT("idx11_head_joint1", value=0.0)     # 单关节运动到指定角度
+    G2.WAIST_CORRECT()       # 根据 detect.json 的 angle_rad 纠正腰部旋转
+    G2.close()
 
     # X2 型号（预留）
     # x2 = Minth.X2()
@@ -148,15 +148,17 @@ class _RobotBase:
               f"{'' if ok else ' [发送失败]'}")
         return ok
 
-    def _send_and_wait(self, cmd, data=None):
-        """发送命令并等待 DONE_TOPIC 回复或超时
+    def _send_and_wait(self, cmd, data=None, speed=None):
+        """发送命令并等待 DONE_TOPIC 回复或超时。
 
-        关节命令发送到 /humanoid/joints/control，
-        动作命令发送到 /humanoid/commands/data。
+        关节命令发送到 /humanoid/joints/control，动作命令发送到
+        /humanoid/commands/data。speed 是关节动作可选的顶层速度参数。
         """
         payload = {"command": cmd}
         if data is not None:
             payload["data"] = data
+        if speed is not None:
+            payload["speed"] = speed
 
         # 选择目标主题
         topic = JOINTS_TOPIC if cmd in self._JOINT_CMDS else COMMANDS_TOPIC
@@ -230,45 +232,41 @@ class G2(_RobotBase):
               f"{'' if ok else ' [发送失败]'}")
         return ok
 
-    def WBC(self, name):
-        """全身关节运动
-        Args:
-            name: 动作名称字符串，对应 datas/joints/WBC/{name}.json
-                  例如 "hold"
-        Returns:
-            bool
-        """
-        return self._send_and_wait("WBC", name)
+    def WBC(self, name, speed=None):
+        """通过单个全身关节请求执行已保存的 WBC 姿态。
 
-    def ARMS(self, name):
-        """双臂关节运动
         Args:
-            name: 动作名称字符串，对应 datas/joints/arms/{name}.json
-                  例如 "hold"
-        Returns:
-            bool
+            name: 动作名称字符串，例如 "hold"。
+            speed: 可选关节速度；不传时使用服务端各部位默认速度。
         """
-        return self._send_and_wait("arms", name)
+        return self._send_and_wait("WBC", name, speed=speed)
 
-    def LEFT(self, name):
-        """左臂关节运动（仅左臂）
-        Args:
-            name: 动作名称字符串，对应 datas/joints/left/{name}.json
-                  例如 "A_PLACE_LOOK"
-        Returns:
-            bool
-        """
-        return self._send_and_wait("left", name)
+    def ARMS(self, name, speed=None):
+        """双臂关节运动。
 
-    def RIGHT(self, name):
-        """右臂关节运动（仅右臂）
         Args:
-            name: 动作名称字符串，对应 datas/joints/right/{name}.json
-                  例如 "A_PLACE_LOOK"
-        Returns:
-            bool
+            name: 动作名称字符串，例如 "hold"。
+            speed: 可选关节速度；不传时使用服务端默认速度。
         """
-        return self._send_and_wait("right", name)
+        return self._send_and_wait("arms", name, speed=speed)
+
+    def LEFT(self, name, speed=None):
+        """左臂关节运动（仅左臂）。
+
+        Args:
+            name: 动作名称字符串，例如 "A_PLACE_LOOK"。
+            speed: 可选关节速度；不传时使用服务端默认速度。
+        """
+        return self._send_and_wait("left", name, speed=speed)
+
+    def RIGHT(self, name, speed=None):
+        """右臂关节运动（仅右臂）。
+
+        Args:
+            name: 动作名称字符串，例如 "A_PLACE_LOOK"。
+            speed: 可选关节速度；不传时使用服务端默认速度。
+        """
+        return self._send_and_wait("right", name, speed=speed)
 
     def HEAD(self, name):
         """头部关节运动
@@ -355,6 +353,18 @@ class G2(_RobotBase):
             bool
         """
         return self._send_and_wait("go_rel", data)
+
+    def REL_ODOM(self, data, speed=0.25):
+        """基于里程计闭环执行底盘相对运动。
+
+        Args:
+            data: ``{"x": 0.3, "y": 0.0, "yaw_rad": 0.0}``，距离单位为米、
+                旋转单位为弧度；z 位移不受支持。
+            speed: 线速度上限（m/s），必须大于 0；旋转使用服务端默认角速度。
+        Returns:
+            bool: 服务端处理完成时为 True，超时为 False。
+        """
+        return self._send_and_wait("go_rel_odom", data, speed=speed)
 
     def REL_NOWAIT(self, data):
         """底盘相对运动（异步，不等待执行完成）

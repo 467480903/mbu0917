@@ -413,9 +413,11 @@ class MqttClient {
      * 发布关节运动命令到 /humanoid/joints/control
      * @param {string} command - 命令名（WBC/arms/left/right/head/waist/joint）
      * @param {*} data - 命令数据
+     * @param {number} [speed] - 可选关节速度；未传时使用服务端默认值
      */
-    publishJointCommand(command, data) {
-        this.publishToTopic(JOINTS_CTRL_TOPIC, { command, data });
+    publishJointCommand(command, data, speed = undefined) {
+        const payload = speed === undefined ? { command, data } : { command, data, speed };
+        this.publishToTopic(JOINTS_CTRL_TOPIC, payload);
     }
 
     /**

@@ -265,7 +265,7 @@ def handle_upload(data):
         return
 
     filename = data.get("filename", "").strip()
-    content = data.get("content", "")
+    content = data.get("content", data.get("code", ""))
 
     if not filename:
         _publish_upload_result(False, error="文件名为空")

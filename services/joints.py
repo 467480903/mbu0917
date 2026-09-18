@@ -30,6 +30,7 @@ joints.py — 关节组件
 
 import os
 import json
+import math
 import time
 
 import agibot_gdk
@@ -55,6 +56,13 @@ RIGHT_ARM_JOINT_KEYS = [
     "idx64_arm_r_joint4", "idx65_arm_r_joint5", "idx66_arm_r_joint6",
     "idx67_arm_r_joint7",
 ]
+# GDK `JointControlReq` 的全身关节顺序。头部顺序按 GDK 官方示例：1、3、2。
+WHOLE_BODY_JOINT_KEYS = (
+    WAIST_JOINT_KEYS
+    + ["idx11_head_joint1", "idx13_head_joint3", "idx12_head_joint2"]
+    + LEFT_ARM_JOINT_KEYS
+    + RIGHT_ARM_JOINT_KEYS
+)
 
 # 运动速度
 HEAD_SPEED = 0.3
@@ -104,50 +112,71 @@ def _load_joints_data(cmd_type, data):
     return pos_data, f"已加载 joints/{cmd_type}/{data}"
 
 
-def _move_head(pos_data):
-    """控制头部 3 个关节运动"""
+def _resolve_speed(msg):
+    """解析 MQTT 顶层可选 speed；返回 (speed, error)。
+
+    speed 为正的有限数值。未提供时返回 None，由各部位沿用其既有默认速度。
+    """
+    speed = (msg or {}).get("speed")
+    if speed is None:
+        return None, None
+    if isinstance(speed, bool) or not isinstance(speed, (int, float)):
+        return None, "speed 必须是正数"
+    speed = float(speed)
+    if not math.isfinite(speed) or speed <= 0:
+        return None, "speed 必须是正的有限数值"
+    return speed, None
+
+
+def _move_head(pos_data, speed=None):
+    """控制头部 3 个关节运动。"""
     pos = _extract_positions(pos_data, HEAD_JOINT_KEYS)
-    vel = [HEAD_SPEED] * len(pos)
-    print(f"  头部 → {[f'{p:.3f}' for p in pos]}")
+    velocity = HEAD_SPEED if speed is None else speed
+    vel = [velocity] * len(pos)
+    print(f"  头部 → {[f'{p:.3f}' for p in pos]}，速度={velocity}")
     common.robot.move_head_joint(pos, vel)
 
 
-def _move_waist(pos_data):
-    """控制腰部 5 个关节运动"""
+def _move_waist(pos_data, speed=None):
+    """控制腰部 5 个关节运动。"""
     pos = _extract_positions(pos_data, WAIST_JOINT_KEYS)
-    vel = [WAIST_SPEED] * len(pos)
-    print(f"  腰部 → {[f'{p:.3f}' for p in pos]}")
+    velocity = WAIST_SPEED if speed is None else speed
+    vel = [velocity] * len(pos)
+    print(f"  腰部 → {[f'{p:.3f}' for p in pos]}，速度={velocity}")
     common.robot.move_waist_joint(pos, vel)
 
 
-def _move_both_arms(pos_data):
-    """控制双臂 14 个关节运动（左臂 7 + 右臂 7）"""
+def _move_both_arms(pos_data, speed=None):
+    """控制双臂 14 个关节运动（左臂 7 + 右臂 7）。"""
     left = _extract_positions(pos_data, LEFT_ARM_JOINT_KEYS)
     right = _extract_positions(pos_data, RIGHT_ARM_JOINT_KEYS)
     positions = left + right
-    velocities = [ARM_SPEED] * len(positions)
+    velocity = ARM_SPEED if speed is None else speed
+    velocities = [velocity] * len(positions)
     print(f"  左臂 → {[f'{p:.3f}' for p in left]}")
-    print(f"  右臂 → {[f'{p:.3f}' for p in right]}")
+    print(f"  右臂 → {[f'{p:.3f}' for p in right]}，速度={velocity}")
     common.robot.move_arm_joint(positions, velocities, 2)
 
 
-def _move_left_arm(pos_data):
-    """仅控制左臂运动（右臂保持当前角度）"""
+def _move_left_arm(pos_data, speed=None):
+    """仅控制左臂运动（右臂保持当前角度）。"""
     left = _extract_positions(pos_data, LEFT_ARM_JOINT_KEYS)
     right = _get_current_angles(RIGHT_ARM_JOINT_KEYS)
     positions = left + right
-    velocities = [ARM_SPEED] * len(positions)
-    print(f"  左臂 → {[f'{p:.3f}' for p in left]}")
+    velocity = ARM_SPEED if speed is None else speed
+    velocities = [velocity] * len(positions)
+    print(f"  左臂 → {[f'{p:.3f}' for p in left]}，速度={velocity}")
     common.robot.move_arm_joint(positions, velocities, 2)
 
 
-def _move_right_arm(pos_data):
-    """仅控制右臂运动（左臂保持当前角度）"""
+def _move_right_arm(pos_data, speed=None):
+    """仅控制右臂运动（左臂保持当前角度）。"""
     left = _get_current_angles(LEFT_ARM_JOINT_KEYS)
     right = _extract_positions(pos_data, RIGHT_ARM_JOINT_KEYS)
     positions = left + right
-    velocities = [ARM_SPEED] * len(positions)
-    print(f"  右臂 → {[f'{p:.3f}' for p in right]}")
+    velocity = ARM_SPEED if speed is None else speed
+    velocities = [velocity] * len(positions)
+    print(f"  右臂 → {[f'{p:.3f}' for p in right]}，速度={velocity}")
     common.robot.move_arm_joint(positions, velocities, 2)
 
 
@@ -161,6 +190,56 @@ BODY_PART_MOVERS = {
 }
 
 
+def _validate_whole_body_positions(pos_data):
+    """验证全身批量控制所需的 22 个关节目标，拒绝缺失或非法数值。"""
+    missing = [name for name in WHOLE_BODY_JOINT_KEYS if name not in pos_data]
+    if missing:
+        raise ValueError(f"WBC 缺少关节目标: {', '.join(missing)}")
+
+    positions = []
+    for name in WHOLE_BODY_JOINT_KEYS:
+        value = pos_data[name]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"WBC 关节 {name} 的目标必须是有限数值")
+        value = float(value)
+        if not math.isfinite(value):
+            raise ValueError(f"WBC 关节 {name} 的目标必须是有限数值")
+        positions.append(value)
+    return positions
+
+
+def _move_whole_body(pos_data, speed=None):
+    """通过单个 GDK 批量请求下发头、腰和双臂的全部 22 个关节。"""
+    positions = _validate_whole_body_positions(pos_data)
+    request = agibot_gdk.JointControlReq()
+    request.life_time = 0.1
+    request.joint_names = WHOLE_BODY_JOINT_KEYS
+    request.joint_positions = positions
+    request.joint_velocities = (
+        [speed] * len(WHOLE_BODY_JOINT_KEYS)
+        if speed is not None
+        else [WAIST_SPEED] * len(WAIST_JOINT_KEYS)
+        + [HEAD_SPEED] * len(HEAD_JOINT_KEYS)
+        + [ARM_SPEED] * (len(LEFT_ARM_JOINT_KEYS) + len(RIGHT_ARM_JOINT_KEYS))
+    )
+    print("  [WBC] 通过单个 JointControlReq 下发 22 个全身关节")
+    common.robot.joint_control_request(request)
+
+
+def _run_body_parts(pos_data, body_parts, speed):
+    """按既定顺序下发局部身体部位控制命令。"""
+    for part in body_parts:
+        mover = BODY_PART_MOVERS.get(part)
+        if mover is None:
+            continue
+        try:
+            mover(pos_data, speed)
+            print(f"  {part} 控制成功")
+        except Exception as e:
+            print(f"  {part} 控制失败: {e}")
+        time.sleep(0.2)
+
+
 def _make_joint_handler(cmd_type, body_parts):
     """创建关节运动处理器
 
@@ -172,30 +251,49 @@ def _make_joint_handler(cmd_type, body_parts):
         要执行的身体部位列表，如 ["head", "waist", "arms"]
     """
     def handler(data, msg=None):
+        speed, speed_error = _resolve_speed(msg)
+        if speed_error:
+            print(f"[关节] {speed_error}: {(msg or {}).get('speed')!r}")
+            return
+
         pos_data, desc = _load_joints_data(cmd_type, data)
         if pos_data is None:
             print(f"[关节] {desc}")
             return
-        print(f"[关节] {desc}")
+        suffix = f"，速度={speed}" if speed is not None else ""
+        print(f"[关节] {desc}{suffix}")
+        _run_body_parts(pos_data, body_parts, speed)
 
-        for part in body_parts:
-            mover = BODY_PART_MOVERS.get(part)
-            if mover is None:
-                continue
-            try:
-                mover(pos_data)
-                print(f"  {part} 控制成功")
-            except Exception as e:
-                print(f"  {part} 控制失败: {e}")
-            time.sleep(0.2)
+    return handler
+
+
+def _make_whole_body_handler():
+    """创建 WBC 处理器：整套姿态以一个 GDK 请求提交，而非拆分部位。"""
+    def handler(data, msg=None):
+        speed, speed_error = _resolve_speed(msg)
+        if speed_error:
+            print(f"[关节] {speed_error}: {(msg or {}).get('speed')!r}")
+            return
+
+        pos_data, desc = _load_joints_data("WBC", data)
+        if pos_data is None:
+            print(f"[关节] {desc}")
+            return
+        suffix = f"，速度={speed}" if speed is not None else ""
+        print(f"[关节] {desc}{suffix}")
+        try:
+            _move_whole_body(pos_data, speed)
+            print("  WBC 全身关节控制成功")
+        except Exception as e:
+            print(f"  WBC 全身关节控制失败: {e}")
 
     return handler
 
 
 # 关节运动命令分发表
-# WBC=全身(head+waist+arms), arms=双臂, left=左臂, right=右臂, head=头部, waist=腰部
+# WBC 通过单个批量请求控制全身；其余命令控制对应局部关节。
 JOINT_MOTION_HANDLERS = {
-    "WBC":   _make_joint_handler("WBC",   ["head", "waist", "arms"]),
+    "WBC":   _make_whole_body_handler(),
     "arms":  _make_joint_handler("arms",  ["arms"]),
     "left":  _make_joint_handler("left",  ["left_arm"]),
     "right": _make_joint_handler("right", ["right_arm"]),

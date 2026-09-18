@@ -637,12 +637,118 @@ class RobotController:
         self._cancel_navi()
         return False
 
+    def go_rel_odom(self,
+                    dx: float = 0.0,
+                    dy: float = 0.0,
+                    dz: float = 0.0,
+                    yaw_rad: float = 0.0,
+                    speed: float = DEFAULT_LINEAR_SPEED,
+                    timeout: float = 60.0) -> bool:
+        """基于里程计闭环执行相对底盘运动。
+
+        与 :meth:`go_rel` 的 PNC 相对导航不同，本方法持续读取 odom，
+        以 ``move_chassis`` 调整速度直至到达相对目标。``speed`` 是平移
+        速度上限（m/s）；旋转使用 ``DEFAULT_ANGULAR_SPEED``（rad/s）。
+        ``dz`` 不受平面底盘支持，必须为 0。
+        """
+        values = (dx, dy, dz, yaw_rad, speed, timeout)
+        if any(isinstance(value, bool) or not isinstance(value, (int, float))
+               or not math.isfinite(value) for value in values):
+            self._log("❌ 里程计相对运动参数必须是有限数值")
+            return False
+        if speed <= 0 or timeout <= 0:
+            self._log("❌ 里程计相对运动 speed 和 timeout 必须大于 0")
+            return False
+        if abs(dz) > 0.001:
+            self._log("❌ 里程计相对运动不支持 z 方向位移")
+            return False
+        if abs(dx) < 0.001 and abs(dy) < 0.001 and abs(yaw_rad) < 0.001:
+            return True
+
+        try:
+            start_odom = self.slam.get_odom_info()
+            start_pos = start_odom.pose.pose.position
+            start_yaw = float(start_odom.orientation_euler.z)
+        except Exception as e:
+            self._log(f"❌ 无法读取起始里程计: {e}")
+            return False
+
+        target_x = start_pos.x + math.cos(start_yaw) * dx - math.sin(start_yaw) * dy
+        target_y = start_pos.y + math.sin(start_yaw) * dx + math.cos(start_yaw) * dy
+        target_yaw = self._normalize_angle(start_yaw + yaw_rad)
+        deadline = time.time() + timeout
+        success = False
+
+        self._log(
+            f"\n🚀 里程计相对运动: dx={dx:+.2f}m dy={dy:+.2f}m "
+            f"yaw={math.degrees(yaw_rad):+.1f}° speed≤{speed:.2f}m/s"
+        )
+        self._cancel_navi()
+        try:
+            # 蟹行模式允许用 vx/vy 对平面里程计误差闭环；旋转阶段单独使用 Ackermann。
+            if abs(dx) >= 0.001 or abs(dy) >= 0.001:
+                self._request_chassis(1)
+                while time.time() < deadline:
+                    odom = self.slam.get_odom_info()
+                    pos = odom.pose.pose.position
+                    yaw = float(odom.orientation_euler.z)
+                    error_x = target_x - pos.x
+                    error_y = target_y - pos.y
+                    distance = math.hypot(error_x, error_y)
+                    if distance <= 0.02:
+                        break
+
+                    # 将世界/里程计坐标误差转换为当前车体坐标，并按合速度限制裁剪。
+                    vx = math.cos(yaw) * error_x + math.sin(yaw) * error_y
+                    vy = -math.sin(yaw) * error_x + math.cos(yaw) * error_y
+                    magnitude = math.hypot(vx, vy)
+                    if magnitude > speed:
+                        vx, vy = vx * speed / magnitude, vy * speed / magnitude
+                    self.pnc.move_chassis(self._make_twist(vx=vx, vy=vy))
+                    time.sleep(CTRL_DT)
+                else:
+                    self._log("⏰ 里程计平移超时")
+                    return False
+
+            if abs(yaw_rad) >= 0.001:
+                self._request_chassis(0)
+                while time.time() < deadline:
+                    odom = self.slam.get_odom_info()
+                    yaw_error = self._normalize_angle(target_yaw - float(odom.orientation_euler.z))
+                    if abs(yaw_error) <= math.radians(2.0):
+                        break
+                    wz = max(-DEFAULT_ANGULAR_SPEED,
+                             min(DEFAULT_ANGULAR_SPEED, yaw_error))
+                    self.pnc.move_chassis(self._make_twist(wz=wz))
+                    time.sleep(CTRL_DT)
+                else:
+                    self._log("⏰ 里程计旋转超时")
+                    return False
+
+            success = True
+            self._log("✅ 里程计相对运动完成")
+            return True
+        except Exception as e:
+            self._log(f"❌ 里程计相对运动异常: {e}")
+            return False
+        finally:
+            self._stop_chassis()
+            self._wait_stop()
+            if not success:
+                self._log("⚠️ 里程计相对运动已停止")
+
+    @staticmethod
+    def _normalize_angle(angle: float) -> float:
+        """将角度归一化到 [-π, π)。"""
+        return (angle + math.pi) % (2.0 * math.pi) - math.pi
+
     # ── 无等待版本（fire-and-forget）──────────────
 
     def navi_to_pose_nowait(self, req, name: str, relative: bool = False) -> bool:
-        """发送导航请求后立即返回（fire-and-forget）
+        """直接下发导航请求后立即返回（fire-and-forget）。
 
-        不等待启动、不做到位判断、不等待完成。
+        不查询或取消已有任务，也不等待启动、到位或完成。调用方负责
+        确保新请求不会与正在执行的底盘任务产生冲突。
         go_nowait（地图点位导航）与 go_rel_nowait（相对运动）共用。
 
         Parameters
@@ -656,15 +762,9 @@ class RobotController:
 
         Returns
         -------
-        bool : True=请求已成功发出，False=发送失败
+        bool : True=GDK 调用未抛出异常，False=发送失败
         """
-        # 取消旧任务
-        state, _, _ = self._task_state()
-        if state not in _DONE and state != 0:
-            self._log("   取消旧任务...")
-            self._cancel_navi()
-
-        self._log(f"\n🚀 导航请求: '{name}' (无等待模式)")
+        self._log(f"\n🚀 导航请求: '{name}' (仅下发，无等待模式)")
 
         try:
             if relative:
@@ -675,7 +775,7 @@ class RobotController:
             self._log(f"❌ 发送失败: {e}")
             return False
 
-        self._log("   请求已发出，不等待完成")
+        self._log("   请求已下发，不查询任务状态或等待完成")
         return True
 
     def go_nowait(self, waypoint: Union[int, str]) -> bool:

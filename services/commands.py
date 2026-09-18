@@ -24,6 +24,7 @@ commands.py — 动作命令组件
 
 import time
 import json
+import math
 
 import agibot_gdk
 
@@ -266,6 +267,38 @@ def handle_go_rel(data, msg=None):
         print(f"  [底盘] 异常: {e}")
 
 
+def handle_go_rel_odom(data, msg=None):
+    """基于里程计闭环的底盘相对运动。
+
+    data 格式: {"x": 0.3, "y": 0.0, "yaw_rad": 0.0}
+    MQTT 顶层 speed 为线速度上限（m/s），默认 0.25。
+    """
+    if not isinstance(data, dict):
+        print(f"  [底盘] 里程计相对运动 data 必须是对象: {data!r}")
+        return
+    try:
+        dx = float(data.get("x", 0.0))
+        dy = float(data.get("y", 0.0))
+        dz = float(data.get("z", 0.0))
+        yaw_rad = float(data.get("yaw_rad", 0.0))
+        speed = float((msg or {}).get("speed", 0.25))
+    except (TypeError, ValueError):
+        print(f"  [底盘] 里程计相对运动参数必须是数值: data={data!r}, speed={(msg or {}).get('speed')!r}")
+        return
+    if not all(math.isfinite(value) for value in (dx, dy, dz, yaw_rad, speed)) or speed <= 0:
+        print("  [底盘] 里程计相对运动参数必须是有限数值，且 speed 必须大于 0")
+        return
+
+    print(f"  [底盘] 里程计相对运动: dx={dx}, dy={dy}, dz={dz}, yaw={yaw_rad}, speed={speed}m/s")
+    try:
+        if not common.nav.go_rel_odom(dx=dx, dy=dy, dz=dz, yaw_rad=yaw_rad, speed=speed):
+            print("  [底盘] 里程计相对运动失败")
+        else:
+            print("  [底盘] 里程计相对运动完成")
+    except Exception as e:
+        print(f"  [底盘] 里程计相对运动异常: {e}")
+
+
 def handle_go_nowait(data, msg=None):
     """导航到指定地图点位（不等待完成，fire-and-forget）
 
@@ -359,6 +392,7 @@ COMMAND_HANDLERS = {
     "cam_head":    handle_cam_head,
     "go":          handle_go,
     "go_rel":      handle_go_rel,
+    "go_rel_odom": handle_go_rel_odom,
     "go_nowait":   handle_go_nowait,
     "go_rel_nowait": handle_go_rel_nowait,
     "pnc_forward": handle_pnc_forward,

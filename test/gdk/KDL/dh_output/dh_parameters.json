@@ -1,0 +1,848 @@
+{
+  "robot_name": "G2",
+  "generated_time": "2026-09-19 18:55:32",
+  "source_file": "/data/wxf/mbu0917/web/meshes/model.urdf",
+  "joint_count": 30,
+  "dh_parameters": {
+    "idx01_body_joint1": {
+      "name": "idx01_body_joint1",
+      "parent": "base_link",
+      "child": "body_link1",
+      "d": 0.0,
+      "theta": 0.0,
+      "a": 0.102,
+      "alpha": 0.0,
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "origin_xyz": [
+        0.102,
+        0.0,
+        0.144
+      ],
+      "origin_rpy": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -1.0821,
+        "upper": 0.0
+      }
+    },
+    "idx02_body_joint2": {
+      "name": "idx02_body_joint2",
+      "parent": "body_link1",
+      "child": "body_link2",
+      "d": 0.0,
+      "theta": 0.0,
+      "a": 0.0,
+      "alpha": 0.0,
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "origin_xyz": [
+        0.0,
+        0.0,
+        0.36
+      ],
+      "origin_rpy": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": 0.0,
+        "upper": 2.6529
+      }
+    },
+    "idx03_body_joint3": {
+      "name": "idx03_body_joint3",
+      "parent": "body_link2",
+      "child": "body_link3",
+      "d": 0.0,
+      "theta": 0.0,
+      "a": 0.0,
+      "alpha": 0.0,
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "origin_xyz": [
+        0.0,
+        0.0,
+        0.38
+      ],
+      "origin_rpy": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -1.919,
+        "upper": 1.117
+      }
+    },
+    "idx04_body_joint4": {
+      "name": "idx04_body_joint4",
+      "parent": "body_link3",
+      "child": "body_link4",
+      "d": 0.0,
+      "theta": 0.0,
+      "a": 0.0,
+      "alpha": 0.0,
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "origin_xyz": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "origin_rpy": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -0.436332313,
+        "upper": 0.436332313
+      }
+    },
+    "idx05_body_joint5": {
+      "name": "idx05_body_joint5",
+      "parent": "body_link4",
+      "child": "body_link5",
+      "d": 0.149,
+      "theta": 0.0,
+      "a": 0.0,
+      "alpha": 0.0,
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "origin_xyz": [
+        0.0,
+        0.0,
+        0.149
+      ],
+      "origin_rpy": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -3.045599545,
+        "upper": 3.045599545
+      }
+    },
+    "idx111_chassis_lwheel_front_joint1": {
+      "name": "idx111_chassis_lwheel_front_joint1",
+      "parent": "chassis_link",
+      "child": "chassis_lwheel_front_link1",
+      "d": 0.16675,
+      "theta": 0.0,
+      "a": 0.316897,
+      "alpha": 0.0,
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "origin_xyz": [
+        0.23,
+        0.218,
+        0.16675
+      ],
+      "origin_rpy": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -2.97,
+        "upper": 2.97
+      }
+    },
+    "idx112_chassis_lwheel_front_joint2": {
+      "name": "idx112_chassis_lwheel_front_joint2",
+      "parent": "chassis_lwheel_front_link1",
+      "child": "chassis_lwheel_front_link2",
+      "d": -5e-05,
+      "theta": 0.0,
+      "a": 5e-05,
+      "alpha": 0.0,
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "origin_xyz": [
+        0.0,
+        -5e-05,
+        -0.13675
+      ],
+      "origin_rpy": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": 0.0,
+        "upper": 0.0
+      }
+    },
+    "idx131_chassis_rwheel_front_joint1": {
+      "name": "idx131_chassis_rwheel_front_joint1",
+      "parent": "chassis_link",
+      "child": "chassis_rwheel_front_link1",
+      "d": 0.16675,
+      "theta": 0.0,
+      "a": 0.316897,
+      "alpha": 0.0,
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "origin_xyz": [
+        0.23,
+        -0.218,
+        0.16675
+      ],
+      "origin_rpy": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -2.97,
+        "upper": 2.97
+      }
+    },
+    "idx132_chassis_rwheel_front_joint2": {
+      "name": "idx132_chassis_rwheel_front_joint2",
+      "parent": "chassis_rwheel_front_link1",
+      "child": "chassis_rwheel_front_link2",
+      "d": 5e-05,
+      "theta": 0.0,
+      "a": 5e-05,
+      "alpha": 0.0,
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "origin_xyz": [
+        0.0,
+        5e-05,
+        -0.13675
+      ],
+      "origin_rpy": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": 0.0,
+        "upper": 0.0
+      }
+    },
+    "idx141_chassis_rwheel_rear_joint1": {
+      "name": "idx141_chassis_rwheel_rear_joint1",
+      "parent": "chassis_link",
+      "child": "chassis_rwheel_rear_link1",
+      "d": 0.16675,
+      "theta": 0.0,
+      "a": 0.316897,
+      "alpha": 0.0,
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "origin_xyz": [
+        -0.23,
+        -0.218,
+        0.16675
+      ],
+      "origin_rpy": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -2.97,
+        "upper": 2.97
+      }
+    },
+    "idx142_chassis_rwheel_rear_joint2": {
+      "name": "idx142_chassis_rwheel_rear_joint2",
+      "parent": "chassis_rwheel_rear_link1",
+      "child": "chassis_rwheel_rear_link2",
+      "d": 5e-05,
+      "theta": 0.0,
+      "a": 5e-05,
+      "alpha": 0.0,
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "origin_xyz": [
+        0.0,
+        5e-05,
+        -0.13675
+      ],
+      "origin_rpy": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": 0.0,
+        "upper": 0.0
+      }
+    },
+    "idx121_chassis_lwheel_rear_joint1": {
+      "name": "idx121_chassis_lwheel_rear_joint1",
+      "parent": "chassis_link",
+      "child": "chassis_lwheel_rear_link1",
+      "d": 0.16675,
+      "theta": 0.0,
+      "a": 0.316897,
+      "alpha": 0.0,
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "origin_xyz": [
+        -0.23,
+        0.218,
+        0.16675
+      ],
+      "origin_rpy": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -2.97,
+        "upper": 2.97
+      }
+    },
+    "idx122_chassis_lwheel_rear_joint2": {
+      "name": "idx122_chassis_lwheel_rear_joint2",
+      "parent": "chassis_lwheel_rear_link1",
+      "child": "chassis_lwheel_rear_link2",
+      "d": -5e-05,
+      "theta": 0.0,
+      "a": 5e-05,
+      "alpha": 0.0,
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "origin_xyz": [
+        0.0,
+        -5e-05,
+        -0.13675
+      ],
+      "origin_rpy": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": 0.0,
+        "upper": 0.0
+      }
+    },
+    "idx11_head_joint1": {
+      "name": "idx11_head_joint1",
+      "parent": "body_link5",
+      "child": "head_link1",
+      "d": 0.496,
+      "theta": 0.0,
+      "a": 0.013,
+      "alpha": 0.0,
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "origin_xyz": [
+        -0.013,
+        0.0,
+        0.496
+      ],
+      "origin_rpy": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -1.5707,
+        "upper": 1.5707
+      }
+    },
+    "idx12_head_joint2": {
+      "name": "idx12_head_joint2",
+      "parent": "head_link1",
+      "child": "head_link2",
+      "d": 0.03335,
+      "theta": 0.0,
+      "a": 0.03335,
+      "alpha": 0.0,
+      "axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "origin_xyz": [
+        0.03335,
+        0.0,
+        0.07
+      ],
+      "origin_rpy": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -0.349,
+        "upper": 0.349
+      }
+    },
+    "idx13_head_joint3": {
+      "name": "idx13_head_joint3",
+      "parent": "head_link2",
+      "child": "head_link3",
+      "d": 0.0,
+      "theta": 0.0,
+      "a": 0.03035,
+      "alpha": 0.0,
+      "axis": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "origin_xyz": [
+        -0.03035,
+        0.0,
+        0.0
+      ],
+      "origin_rpy": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -0.5236,
+        "upper": 0.5236
+      }
+    },
+    "idx21_arm_l_joint1": {
+      "name": "idx21_arm_l_joint1",
+      "parent": "arm_base_link",
+      "child": "arm_l_link1",
+      "d": 0.069,
+      "theta": 0.0,
+      "a": 0.0,
+      "alpha": 0.0,
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "origin_xyz": [
+        0.0,
+        0.0,
+        0.069
+      ],
+      "origin_rpy": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -3.071796937,
+        "upper": 3.071796937
+      }
+    },
+    "idx22_arm_l_joint2": {
+      "name": "idx22_arm_l_joint2",
+      "parent": "arm_l_link1",
+      "child": "arm_l_link2",
+      "d": 0.1745,
+      "theta": 0.0,
+      "a": 0.0,
+      "alpha": 1.5708,
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "origin_xyz": [
+        0.0,
+        0.0,
+        0.1745
+      ],
+      "origin_rpy": [
+        1.5708,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -2.059505971,
+        "upper": 2.059505971
+      }
+    },
+    "idx23_arm_l_joint3": {
+      "name": "idx23_arm_l_joint3",
+      "parent": "arm_l_link2",
+      "child": "arm_l_link3",
+      "d": 0.0,
+      "theta": 0.0,
+      "a": 0.0,
+      "alpha": -1.5708,
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "origin_xyz": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "origin_rpy": [
+        -1.5708,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -3.071796937,
+        "upper": 3.071796937
+      }
+    },
+    "idx24_arm_l_joint4": {
+      "name": "idx24_arm_l_joint4",
+      "parent": "arm_l_link3",
+      "child": "arm_l_link4",
+      "d": 0.287,
+      "theta": 0.0,
+      "a": 0.018,
+      "alpha": 1.5708,
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "origin_xyz": [
+        0.018,
+        0.0,
+        0.287
+      ],
+      "origin_rpy": [
+        1.5708,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -2.495838284,
+        "upper": 1.012308419
+      }
+    },
+    "idx25_arm_l_joint5": {
+      "name": "idx25_arm_l_joint5",
+      "parent": "arm_l_link4",
+      "child": "arm_l_link5",
+      "d": 0.0,
+      "theta": 0.0,
+      "a": 0.018,
+      "alpha": -1.5708,
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "origin_xyz": [
+        -0.018,
+        0.0,
+        0.0
+      ],
+      "origin_rpy": [
+        -1.5708,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -3.071796937,
+        "upper": 3.071796937
+      }
+    },
+    "idx26_arm_l_joint6": {
+      "name": "idx26_arm_l_joint6",
+      "parent": "arm_l_link5",
+      "child": "arm_l_link6",
+      "d": 0.314,
+      "theta": 0.0,
+      "a": 0.0,
+      "alpha": 1.5708,
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "origin_xyz": [
+        0.0,
+        0.0,
+        0.314
+      ],
+      "origin_rpy": [
+        1.5708,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -1.012308419,
+        "upper": 1.012308419
+      }
+    },
+    "idx27_arm_l_joint7": {
+      "name": "idx27_arm_l_joint7",
+      "parent": "arm_l_link6",
+      "child": "arm_l_link7",
+      "d": 0.0,
+      "theta": 0.0,
+      "a": 0.0,
+      "alpha": 1.5708,
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "origin_xyz": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "origin_rpy": [
+        1.5708,
+        0.0,
+        1.5708
+      ],
+      "joint_limits": {
+        "lower": -1.535907195,
+        "upper": 1.535907195
+      }
+    },
+    "idx61_arm_r_joint1": {
+      "name": "idx61_arm_r_joint1",
+      "parent": "arm_base_link",
+      "child": "arm_r_link1",
+      "d": -0.069,
+      "theta": 0.0,
+      "a": 0.0,
+      "alpha": 3.141593,
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "origin_xyz": [
+        0.0,
+        0.0,
+        -0.069
+      ],
+      "origin_rpy": [
+        3.141592653589793,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -3.071796937,
+        "upper": 3.071796937
+      }
+    },
+    "idx62_arm_r_joint2": {
+      "name": "idx62_arm_r_joint2",
+      "parent": "arm_r_link1",
+      "child": "arm_r_link2",
+      "d": 0.1745,
+      "theta": 0.0,
+      "a": 0.0,
+      "alpha": 1.570796,
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "origin_xyz": [
+        0.0,
+        0.0,
+        0.1745
+      ],
+      "origin_rpy": [
+        1.5707963267948966,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -2.059505971,
+        "upper": 2.059505971
+      }
+    },
+    "idx63_arm_r_joint3": {
+      "name": "idx63_arm_r_joint3",
+      "parent": "arm_r_link2",
+      "child": "arm_r_link3",
+      "d": 0.0,
+      "theta": 0.0,
+      "a": 0.0,
+      "alpha": -1.570796,
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "origin_xyz": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "origin_rpy": [
+        -1.5707963267948966,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -3.071796937,
+        "upper": 3.071796937
+      }
+    },
+    "idx64_arm_r_joint4": {
+      "name": "idx64_arm_r_joint4",
+      "parent": "arm_r_link3",
+      "child": "arm_r_link4",
+      "d": 0.287,
+      "theta": 0.0,
+      "a": 0.018,
+      "alpha": 1.570796,
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "origin_xyz": [
+        0.018,
+        0.0,
+        0.287
+      ],
+      "origin_rpy": [
+        1.5707963267948966,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -2.495838284,
+        "upper": 1.012308419
+      }
+    },
+    "idx65_arm_r_joint5": {
+      "name": "idx65_arm_r_joint5",
+      "parent": "arm_r_link4",
+      "child": "arm_r_link5",
+      "d": 0.0,
+      "theta": 0.0,
+      "a": 0.018,
+      "alpha": -1.570796,
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "origin_xyz": [
+        -0.018,
+        0.0,
+        0.0
+      ],
+      "origin_rpy": [
+        -1.5707963267948966,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -3.071796937,
+        "upper": 3.071796937
+      }
+    },
+    "idx66_arm_r_joint6": {
+      "name": "idx66_arm_r_joint6",
+      "parent": "arm_r_link5",
+      "child": "arm_r_link6",
+      "d": 0.314,
+      "theta": 0.0,
+      "a": 0.0,
+      "alpha": 1.570796,
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "origin_xyz": [
+        0.0,
+        0.0,
+        0.314
+      ],
+      "origin_rpy": [
+        1.5707963267948966,
+        0.0,
+        0.0
+      ],
+      "joint_limits": {
+        "lower": -1.012308419,
+        "upper": 1.012308419
+      }
+    },
+    "idx67_arm_r_joint7": {
+      "name": "idx67_arm_r_joint7",
+      "parent": "arm_r_link6",
+      "child": "arm_r_link7",
+      "d": 0.0,
+      "theta": 0.0,
+      "a": 0.0,
+      "alpha": 1.570796,
+      "axis": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "origin_xyz": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "origin_rpy": [
+        1.5707963267948966,
+        0.0,
+        1.5707963267948966
+      ],
+      "joint_limits": {
+        "lower": -1.535907195,
+        "upper": 1.535907195
+      }
+    }
+  }
+}

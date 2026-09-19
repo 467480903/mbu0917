@@ -1,0 +1,97 @@
+{
+  "cmd": "detect2tagsForLineDistance",
+  "time": "20260919150700998",
+  "success": true,
+  "imgPath": "/data/wxf/mbu0917/images",
+  "resultSavePath": "/data/wxf/mbu0917/detect",
+  "color_image": "/data/wxf/mbu0917/images/kHeadColor_latest.jpg",
+  "depth_raw": "/data/wxf/mbu0917/images/kHeadDepth_raw_latest.raw",
+  "family": "tag36h11",
+  "tags": [
+    {
+      "id": 3,
+      "family": "tag36h11",
+      "hamming": 0,
+      "decision_margin": 65.70973205566406,
+      "center_px": [
+        242.11954962605515,
+        161.970279530964
+      ],
+      "corners_px": [
+        [
+          261.5927734375,
+          142.30928039550784
+        ],
+        [
+          219.4698028564453,
+          140.9173278808594
+        ],
+        [
+          223.8190307617188,
+          180.447265625
+        ],
+        [
+          263.4474792480469,
+          181.7946014404297
+        ]
+      ],
+      "depth_3x3_mean_mm": 713.2222222222222,
+      "depth_valid_samples": 9
+    },
+    {
+      "id": 4,
+      "family": "tag36h11",
+      "hamming": 0,
+      "decision_margin": 68.67193603515625,
+      "center_px": [
+        425.75005315424374,
+        165.70667479027674
+      ],
+      "corners_px": [
+        [
+          450.29785156249994,
+          146.1160430908203
+        ],
+        [
+          408.4126586914063,
+          144.81744384765622
+        ],
+        [
+          402.4890441894532,
+          184.2703704833984
+        ],
+        [
+          441.9123229980469,
+          185.18003845214847
+        ]
+      ],
+      "depth_3x3_mean_mm": 715.6666666666666,
+      "depth_valid_samples": 9
+    }
+  ],
+  "centerline": {
+    "ordered_by": "center_x_ascending",
+    "dx_px": 183.6305035281886,
+    "dy_px": 3.7363952593127294,
+    "slope_dy_dx": 0.020347356171896386,
+    "angle_rad": 0.020344548832999614,
+    "is_vertical": false,
+    "center_distance_px": 183.66851247709798,
+    "midpoint_px": [
+      333.93480139014946,
+      163.83847716062036
+    ],
+    "midpoint_vertical_x_px": 333.93480139014946,
+    "image_center_vertical_x_px": 320.0,
+    "vertical_line_horizontal_distance_px": 13.93480139014946,
+    "midpoint_offset_from_image_center_px": 13.93480139014946
+  },
+  "mean_tag_depth_mm": 714.4444444444443,
+  "depth_unit": "mm",
+  "result_json": "/data/wxf/mbu0917/detect/detect2tagsForLineDistance_20260919150700998.json",
+  "result_jpg": "/data/wxf/mbu0917/detect/detect2tagsForLineDistance_20260919150700998.jpg",
+  "latest_json": "/data/wxf/mbu0917/detect/detect2tagsForLineDistance_latest.json",
+  "latest_jpg": "/data/wxf/mbu0917/detect/detect2tagsForLineDistance_latest.jpg",
+  "detected_count": 2,
+  "depth_status": "ok"
+}

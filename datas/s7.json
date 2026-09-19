@@ -1,0 +1,22 @@
+[
+  {
+    "name": "s1200",
+    "ip": "10.20.17.99",
+    "read": [
+      {"name": "heart_beat_plc", "addr": "DB300.DBX0.0", "type": "bool"},
+      {"name": "is_pickable", "addr": "DB300.DBX0.1", "type": "bool"},
+      {"name": "is_placeable", "addr": "DB300.DBX0.2", "type": "bool"},
+      {"name": "ES", "addr": "DB300.DBX0.3", "type": "bool"}
+    ],
+    "write": [
+
+
+
+      {"name": "heart_beat_g2", "addr": "DB300.DBX0.0", "type": "bool"},
+      {"name": "is_running", "addr": "DB300.DBX0.1", "type": "bool"},
+      {"name": "is_pick_done", "addr": "DB300.DBX0.2", "type": "bool"},
+      {"name": "is_place_done", "addr": "DB300.DBX0.3", "type": "bool"}
+    ],
+    "rate": 100
+  }
+]

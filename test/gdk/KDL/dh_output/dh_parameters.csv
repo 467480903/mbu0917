@@ -1,0 +1,33 @@
+# DH Parameters for G2 Robot
+# Generated: 2026-09-19 18:55:32
+# Joint_Name, Parent, Child, d(m), theta(rad), a(m), alpha(rad), Axis, Lower_Limit(rad), Upper_Limit(rad)
+idx01_body_joint1,base_link,body_link1,0.000000,0.000000,0.102000,0.000000,[0.0, 1.0, 0.0],-1.082100,0.000000
+idx02_body_joint2,body_link1,body_link2,0.000000,0.000000,0.000000,0.000000,[0.0, 1.0, 0.0],0.000000,2.652900
+idx03_body_joint3,body_link2,body_link3,0.000000,0.000000,0.000000,0.000000,[0.0, 1.0, 0.0],-1.919000,1.117000
+idx04_body_joint4,body_link3,body_link4,0.000000,0.000000,0.000000,0.000000,[1.0, 0.0, 0.0],-0.436332,0.436332
+idx05_body_joint5,body_link4,body_link5,0.149000,0.000000,0.000000,0.000000,[0.0, 0.0, 1.0],-3.045600,3.045600
+idx111_chassis_lwheel_front_joint1,chassis_link,chassis_lwheel_front_link1,0.166750,0.000000,0.316897,0.000000,[0.0, 0.0, 1.0],-2.970000,2.970000
+idx112_chassis_lwheel_front_joint2,chassis_lwheel_front_link1,chassis_lwheel_front_link2,-0.000050,0.000000,0.000050,0.000000,[0.0, 1.0, 0.0],0.000000,0.000000
+idx131_chassis_rwheel_front_joint1,chassis_link,chassis_rwheel_front_link1,0.166750,0.000000,0.316897,0.000000,[0.0, 0.0, 1.0],-2.970000,2.970000
+idx132_chassis_rwheel_front_joint2,chassis_rwheel_front_link1,chassis_rwheel_front_link2,0.000050,0.000000,0.000050,0.000000,[0.0, 1.0, 0.0],0.000000,0.000000
+idx141_chassis_rwheel_rear_joint1,chassis_link,chassis_rwheel_rear_link1,0.166750,0.000000,0.316897,0.000000,[0.0, 0.0, 1.0],-2.970000,2.970000
+idx142_chassis_rwheel_rear_joint2,chassis_rwheel_rear_link1,chassis_rwheel_rear_link2,0.000050,0.000000,0.000050,0.000000,[0.0, 1.0, 0.0],0.000000,0.000000
+idx121_chassis_lwheel_rear_joint1,chassis_link,chassis_lwheel_rear_link1,0.166750,0.000000,0.316897,0.000000,[0.0, 0.0, 1.0],-2.970000,2.970000
+idx122_chassis_lwheel_rear_joint2,chassis_lwheel_rear_link1,chassis_lwheel_rear_link2,-0.000050,0.000000,0.000050,0.000000,[0.0, 1.0, 0.0],0.000000,0.000000
+idx11_head_joint1,body_link5,head_link1,0.496000,0.000000,0.013000,0.000000,[0.0, 0.0, 1.0],-1.570700,1.570700
+idx12_head_joint2,head_link1,head_link2,0.033350,0.000000,0.033350,0.000000,[1.0, 0.0, 0.0],-0.349000,0.349000
+idx13_head_joint3,head_link2,head_link3,0.000000,0.000000,0.030350,0.000000,[0.0, 1.0, 0.0],-0.523600,0.523600
+idx21_arm_l_joint1,arm_base_link,arm_l_link1,0.069000,0.000000,0.000000,0.000000,[0.0, 0.0, 1.0],-3.071797,3.071797
+idx22_arm_l_joint2,arm_l_link1,arm_l_link2,0.174500,0.000000,0.000000,1.570800,[0.0, 0.0, 1.0],-2.059506,2.059506
+idx23_arm_l_joint3,arm_l_link2,arm_l_link3,0.000000,0.000000,0.000000,-1.570800,[0.0, 0.0, 1.0],-3.071797,3.071797
+idx24_arm_l_joint4,arm_l_link3,arm_l_link4,0.287000,0.000000,0.018000,1.570800,[0.0, 0.0, 1.0],-2.495838,1.012308
+idx25_arm_l_joint5,arm_l_link4,arm_l_link5,0.000000,0.000000,0.018000,-1.570800,[0.0, 0.0, 1.0],-3.071797,3.071797
+idx26_arm_l_joint6,arm_l_link5,arm_l_link6,0.314000,0.000000,0.000000,1.570800,[0.0, 0.0, 1.0],-1.012308,1.012308
+idx27_arm_l_joint7,arm_l_link6,arm_l_link7,0.000000,0.000000,0.000000,1.570800,[0.0, 0.0, 1.0],-1.535907,1.535907
+idx61_arm_r_joint1,arm_base_link,arm_r_link1,-0.069000,0.000000,0.000000,3.141593,[0.0, 0.0, 1.0],-3.071797,3.071797
+idx62_arm_r_joint2,arm_r_link1,arm_r_link2,0.174500,0.000000,0.000000,1.570796,[0.0, 0.0, 1.0],-2.059506,2.059506
+idx63_arm_r_joint3,arm_r_link2,arm_r_link3,0.000000,0.000000,0.000000,-1.570796,[0.0, 0.0, 1.0],-3.071797,3.071797
+idx64_arm_r_joint4,arm_r_link3,arm_r_link4,0.287000,0.000000,0.018000,1.570796,[0.0, 0.0, 1.0],-2.495838,1.012308
+idx65_arm_r_joint5,arm_r_link4,arm_r_link5,0.000000,0.000000,0.018000,-1.570796,[0.0, 0.0, 1.0],-3.071797,3.071797
+idx66_arm_r_joint6,arm_r_link5,arm_r_link6,0.314000,0.000000,0.000000,1.570796,[0.0, 0.0, 1.0],-1.012308,1.012308
+idx67_arm_r_joint7,arm_r_link6,arm_r_link7,0.000000,0.000000,0.000000,1.570796,[0.0, 0.0, 1.0],-1.535907,1.535907

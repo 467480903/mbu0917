@@ -229,14 +229,17 @@ def on_message(client, userdata, msg):
 def _handle_data_read(payload):
     """处理 /humanoid/data/read 请求，返回 synch 变量值"""
     name = payload.get("name")
+    request_id = payload.get("request_id")
     if not name:
         common.publish(common.TOPIC_DATA_RESPONSE, {
-            "command": "read", "name": None, "value": None, "error": "missing name"
+            "command": "read", "name": None, "value": None,
+            "error": "missing name", "request_id": request_id,
         })
         return
     value = db.synch_read(name)
     common.publish(common.TOPIC_DATA_RESPONSE, {
-        "command": "read", "name": name, "value": value
+        "command": "read", "name": name, "value": value,
+        "request_id": request_id,
     })
     print(f"[Data] readData({name}) = {value}")
 
@@ -245,14 +248,17 @@ def _handle_data_write(payload):
     """处理 /humanoid/data/write 请求，更新 synch write 条目"""
     name = payload.get("name")
     value = payload.get("value")
+    request_id = payload.get("request_id")
     if not name:
         common.publish(common.TOPIC_DATA_RESPONSE, {
-            "command": "write", "name": None, "value": None, "error": "missing name"
+            "command": "write", "name": None, "value": None,
+            "error": "missing name", "request_id": request_id,
         })
         return
     ok = db.synch_write(name, value)
     common.publish(common.TOPIC_DATA_RESPONSE, {
-        "command": "write", "name": name, "success": ok
+        "command": "write", "name": name, "success": ok,
+        "request_id": request_id,
     })
     if ok:
         print(f"[Data] setData({name}, {value}) 已更新 synch")

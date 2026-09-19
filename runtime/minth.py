@@ -1,579 +1,389 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Minth 机器人控制类库
+"""Minth G2 MQTT 控制客户端。
 
-通过 MQTT 向 g2_minth_app_service 发送命令，并同步等待执行完成。
+所有常规机器人运动命令直接发布 MQTT 并立刻返回本地发布状态。每个命令
+方法都会打印实际下发的 JSON 报文，方便在运行程序时检查协议内容。
 
-用法：
-    from minth import Minth
-
-    G2 = Minth.G2()
-    G2.GO(9)                 # 导航到地图点位 9
-    G2.WBC("hold")           # 执行全身关节动作 hold.json
-    G2.ARMS("hold")          # 执行双臂关节动作 arms/hold.json
-    G2.TTS("你好")           # 语音播报
-    G2.REL({"x": 0.3})       # 底盘前进 0.3 米
-    G2.OFFSET({"lx": 20})    # 左末端相对移动 20mm
-    G2.GRIPPER({"left": 0.5, "right": 0.5})
-    G2.YOLO("7.14.pt")               # YOLO 目标检测（使用服务端默认 IP）
-    G2.YOLO("wxf.pt")                # 使用 wxf.pt 模型检测
-    G2.YOLO("wxf.pt", "10.2.236.7")  # 指定自定义 YOLO 服务端 IP
-    G2.CHASSIS_CORRECT()     # 根据 detect.json 纠正底盘水平偏移
-    G2.JOINT("idx11_head_joint1", offset=0.01)   # 单关节增量微调
-    G2.JOINT("idx11_head_joint1", value=0.0)     # 单关节运动到指定角度
-    G2.WAIST_CORRECT()       # 根据 detect.json 的 angle_rad 纠正腰部旋转
-    G2.close()
-
-    # X2 型号（预留）
-    # x2 = Minth.X2()
+需要等待服务端数据响应的接口：readData、setData、MoveL、SAVE_PHOTO。
 """
 
 import json
 import os
 import threading
 import time
+import uuid
 
 import paho.mqtt.client as mqtt
 
 
-# ── MQTT 配置（与 services/main.py 对齐）─────────────────
 MQTT_BROKER = "localhost"
 MQTT_PORT = 1883
-# 关节运动命令主题
+
 JOINTS_TOPIC = "/humanoid/joints/control"
-# 动作命令主题
 COMMANDS_TOPIC = "/humanoid/commands/data"
-# 命令完成通知主题
 DONE_TOPIC = "/humanoid/commands/done"
-# 相机控制主题
 CAMERA_TOPIC = "/humanoid/camera/control"
-# 坐标点位控制主题
 POSITIONS_CTRL_TOPIC = "/humanoid/positions/control"
 POSITIONS_DATA_TOPIC = "/humanoid/positions/data"
+DATA_READ_TOPIC = "/humanoid/data/read"
+DATA_WRITE_TOPIC = "/humanoid/data/write"
+DATA_RESPONSE_TOPIC = "/humanoid/data/response"
 
-# 默认超时时间（秒）
 DEFAULT_TIMEOUT = 15
-
-# detect.json 路径（runtime/../detect/detect.json）
 _DETECT_JSON = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "detect", "detect.json",
 )
 
-# 像素 → 米 转换系数
-# 实测：70 像素偏移 → 需向右移动 130 毫米 → 系数 = 130/70/1000 m/px
-# 向右 = y 负方向，故加负号
-PX_TO_METER = -130.0 / 70.0 / 1000.0
 
+class G2:
+    """G2 机器人 MQTT 控制类。"""
 
-class _RobotBase:
-    """机器人基类：封装 MQTT 通信和同步等待逻辑"""
-
-    def __init__(self, broker=MQTT_BROKER, port=MQTT_PORT, timeout=DEFAULT_TIMEOUT, client_id=None):
+    def __init__(
+        self,
+        broker=MQTT_BROKER,
+        port=MQTT_PORT,
+        timeout=DEFAULT_TIMEOUT,
+        client_id=None,
+    ):
         self.broker = broker
         self.port = port
         self.timeout = timeout
+        self._connected = False
         self._done_event = threading.Event()
         self._done_cmd = None
         self._positions_event = threading.Event()
         self._positions_result = None
-        self._connected = False
-        cid = client_id or f"minth_{self.__class__.__name__}_{id(self)}"
+        self._data_lock = threading.Lock()
+        self._data_ready = threading.Event()
+        self._data_request_id = None
+        self._data_response = None
+
+        mqtt_client_id = client_id or f"minth_G2_{id(self)}"
         self._client = mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2,
-            client_id=cid,
+            client_id=mqtt_client_id,
         )
         self._client.on_connect = self._on_connect
         self._client.on_message = self._on_message
         self._client.connect(broker, port)
         self._client.loop_start()
-        # 等待连接建立
+
         for _ in range(50):
             if self._connected:
                 break
             threading.Event().wait(0.1)
         if not self._connected:
+            self.close()
             raise ConnectionError(f"无法连接到 MQTT broker {broker}:{port}")
 
-    # ── MQTT 回调 ──────────────────────────────────────────
     def _on_connect(self, client, userdata, flags, rc, properties=None):
-        if rc == 0:
-            client.subscribe(DONE_TOPIC, qos=2)
-            client.subscribe(POSITIONS_DATA_TOPIC, qos=0)
-            self._connected = True
-        else:
-            raise ConnectionError(f"MQTT 连接失败，返回码: {rc}")
+        if rc != 0:
+            print(f"[Minth] MQTT 连接失败，返回码: {rc}")
+            return
+        client.subscribe(DONE_TOPIC, qos=2)
+        client.subscribe(POSITIONS_DATA_TOPIC, qos=0)
+        client.subscribe(DATA_RESPONSE_TOPIC, qos=0)
+        self._connected = True
+        print(f"[Minth] MQTT 已连接: {self.broker}:{self.port}")
 
     def _on_message(self, client, userdata, msg):
         if msg.topic == DONE_TOPIC:
             try:
-                data = json.loads(msg.payload.decode())
+                self._done_cmd = json.loads(msg.payload.decode()).get("cmd", "")
             except Exception:
-                data = {}
-            # 只接受与当前等待命令匹配的 done（done 消息带 cmd 字段），
-            # 避免快速命令（如 go_nowait）的 done 错误唤醒其他命令的等待
-            self._done_cmd = data.get("cmd", "")
+                self._done_cmd = ""
             self._done_event.set()
-        elif msg.topic == POSITIONS_DATA_TOPIC:
+            return
+
+        if msg.topic == POSITIONS_DATA_TOPIC:
             try:
-                data = json.loads(msg.payload.decode())
-                self._positions_result = data
+                self._positions_result = json.loads(msg.payload.decode())
                 self._positions_event.set()
             except Exception:
                 pass
+            return
 
-    # ── 核心：发送命令并等待完成 ────────────────────────────
-    # 关节命令集合（发送到 /humanoid/joints/control）
-    _JOINT_CMDS = {"WBC", "arms", "left", "right", "head", "waist", "joint"}
+        if msg.topic == DATA_RESPONSE_TOPIC:
+            try:
+                payload = json.loads(msg.payload.decode("utf-8"))
+            except Exception:
+                return
+            if payload.get("request_id") == self._data_request_id:
+                self._data_response = payload
+                self._data_ready.set()
 
-    def DONE(self, message=None):
-        """向 /humanoid/commands/done 发送执行完成信号
-
-        与后端 services 的 done 消息格式一致（{"command":"done"}）。
-        可用于自定义脚本结束时通知等待方。
-
-        Args:
-            message: 可选，附加信息，如 "program_finished"
-        Returns:
-            bool: True=信号已成功发出，False=发送失败
-        """
-        payload = {"command": "done"}
-        if message is not None:
-            payload["message"] = str(message)
-        msg_str = json.dumps(payload, ensure_ascii=False)
-        info = self._client.publish(DONE_TOPIC, msg_str, qos=2)
-        ok = getattr(info, "rc", 0) == 0
-        print(f"[Minth] → done 信号已发送"
-              f"{'' if ok else ' [发送失败]'}")
-        return ok
-
-    def _send_and_wait(self, cmd, data=None, speed=None):
-        """发送命令并等待 DONE_TOPIC 回复或超时。
-
-        关节命令发送到 /humanoid/joints/control，动作命令发送到
-        /humanoid/commands/data。speed 是关节动作可选的顶层速度参数。
-        """
-        payload = {"command": cmd}
-        if data is not None:
-            payload["data"] = data
-        if speed is not None:
-            payload["speed"] = speed
-
-        # 选择目标主题
-        topic = JOINTS_TOPIC if cmd in self._JOINT_CMDS else COMMANDS_TOPIC
-
-        self._done_cmd = None
-        self._done_event.clear()
-        msg_str = json.dumps(payload, ensure_ascii=False)
-        self._client.publish(topic, msg_str, qos=2)
-        print(f"[Minth] → {cmd}: {data}")
-
-        # 只接受与自己命令匹配的 done，其他命令的 done 忽略后继续等待
-        deadline = time.time() + self.timeout
-        done = False
-        while time.time() < deadline:
-            if self._done_event.wait(timeout=deadline - time.time()):
-                self._done_event.clear()
-                if self._done_cmd == cmd:
-                    done = True
-                    break
-                # 别的命令的 done，忽略
-        if done:
-            print(f"[Minth] ✓ {cmd} 执行完成")
-        else:
-            print(f"[Minth] ✗ {cmd} 超时 ({self.timeout}s)")
-        return done
-
-    # ── 释放资源 ──────────────────────────────────────────
     def close(self):
-        if self._client:
+        """停止 MQTT 网络循环并释放客户端连接。"""
+        if self._client is not None:
             self._client.loop_stop()
             self._client.disconnect()
             self._client = None
 
     def __del__(self):
-        self.close()
+        try:
+            self.close()
+        except Exception:
+            pass
 
+    def DONE(self, message=None):
+        """向 /humanoid/commands/done 发布外部程序完成通知。"""
+        payload = {"command": "done"}
+        if message is not None:
+            payload["message"] = str(message)
+        message_json = json.dumps(payload, ensure_ascii=False)
+        print(f"[Minth] MQTT {DONE_TOPIC}: {message_json}")
+        info = self._client.publish(DONE_TOPIC, message_json, qos=2)
+        return getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS) == mqtt.MQTT_ERR_SUCCESS
 
-class G2(_RobotBase):
-    """Minth G2 机器人控制类
+    # ── Modbus / Siemens S7 同步变量 ───────────────────────
 
-    所有方法均为同步阻塞调用：发送 MQTT 命令后等待 /G2_minth_app_done 回复，
-    收到后返回 True；15 秒超时返回 False。
-    """
+    def readData(self, name):
+        """读取 ``synch`` read 类型变量，等待服务端数据响应。"""
+        with self._data_lock:
+            request_id = uuid.uuid4().hex
+            payload = {"command": "read", "name": name, "request_id": request_id}
+            self._data_request_id = request_id
+            self._data_response = None
+            self._data_ready.clear()
+            message_json = json.dumps(payload, ensure_ascii=False)
+            print(f"[Minth] MQTT {DATA_READ_TOPIC}: {message_json}")
+            info = self._client.publish(DATA_READ_TOPIC, message_json, qos=0)
+            if getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS) != mqtt.MQTT_ERR_SUCCESS:
+                return None
+            if not self._data_ready.wait(timeout=self.timeout):
+                print(f"[Minth] readData({name}) 超时")
+                return None
+            response = self._data_response or {}
+            value = response.get("value") if response.get("command") == "read" else None
+            print(f"[Minth] readData({name}) = {value}")
+            return value
+
+    def setData(self, name, value):
+        """设置 ``synch`` write 类型变量，等待服务端接受确认。"""
+        with self._data_lock:
+            request_id = uuid.uuid4().hex
+            payload = {
+                "command": "write",
+                "name": name,
+                "value": value,
+                "request_id": request_id,
+            }
+            self._data_request_id = request_id
+            self._data_response = None
+            self._data_ready.clear()
+            message_json = json.dumps(payload, ensure_ascii=False)
+            print(f"[Minth] MQTT {DATA_WRITE_TOPIC}: {message_json}")
+            info = self._client.publish(DATA_WRITE_TOPIC, message_json, qos=0)
+            if getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS) != mqtt.MQTT_ERR_SUCCESS:
+                return False
+            if not self._data_ready.wait(timeout=self.timeout):
+                print(f"[Minth] setData({name}, {value}) 超时")
+                return False
+            response = self._data_response or {}
+            accepted = response.get("command") == "write" and response.get("success") is True
+            print(f"[Minth] setData({name}, {value}): {'已接收' if accepted else '被拒绝'}")
+            return accepted
+
+    # ── 机器人运动命令：直接发布，不等待 done ─────────────
 
     def GO(self, num):
-        """导航到指定地图点位
-        Args:
-            num: 导航点索引（整数），如 9
-        Returns:
-            bool: True=执行完成，False=超时
-        """
-        return self._send_and_wait("go", num)
+        """导航到地图点位。报文：{"command":"go","data":<点位编号>}。"""
+        payload = {"command": "go", "data": num}
+        message_json = json.dumps(payload, ensure_ascii=False)
+        print(f"[Minth] MQTT {COMMANDS_TOPIC}: {message_json}")
+        info = self._client.publish(COMMANDS_TOPIC, message_json, qos=2)
+        return getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS) == mqtt.MQTT_ERR_SUCCESS
 
     def GO_NOWAIT(self, num):
-        """导航到指定地图点位（异步，不等待执行完成）
-
-        后端使用 go_nowait 命令：只发送导航请求立即返回，
-        不等待启动、不做到位判断、不等待完成。
-        适用于 fire-and-forget 场景。
-
-        Args:
-            num: 导航点索引（整数），如 9
-        Returns:
-            bool: True=命令已成功下发，False=发送失败
-        """
+        """异步导航。报文：{"command":"go_nowait","data":<点位编号>}。"""
         payload = {"command": "go_nowait", "data": num}
-        msg_str = json.dumps(payload, ensure_ascii=False)
-        info = self._client.publish(COMMANDS_TOPIC, msg_str, qos=2)
-        ok = getattr(info, "rc", 0) == 0
-        print(f"[Minth] → go (nowait): {num}"
-              f"{'' if ok else ' [发送失败]'}")
-        return ok
+        message_json = json.dumps(payload, ensure_ascii=False)
+        print(f"[Minth] MQTT {COMMANDS_TOPIC}: {message_json}")
+        info = self._client.publish(COMMANDS_TOPIC, message_json, qos=2)
+        return getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS) == mqtt.MQTT_ERR_SUCCESS
 
     def WBC(self, name, speed=None):
-        """通过单个全身关节请求执行已保存的 WBC 姿态。
-
-        Args:
-            name: 动作名称字符串，例如 "hold"。
-            speed: 可选关节速度；不传时使用服务端各部位默认速度。
-        """
-        return self._send_and_wait("WBC", name, speed=speed)
+        """全身姿态。报文：{"command":"WBC","data":"名称","speed":可选速度}。"""
+        payload = {"command": "WBC", "data": name}
+        if speed is not None:
+            payload["speed"] = speed
+        message_json = json.dumps(payload, ensure_ascii=False)
+        print(f"[Minth] MQTT {JOINTS_TOPIC}: {message_json}")
+        info = self._client.publish(JOINTS_TOPIC, message_json, qos=2)
+        return getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS) == mqtt.MQTT_ERR_SUCCESS
 
     def ARMS(self, name, speed=None):
-        """双臂关节运动。
-
-        Args:
-            name: 动作名称字符串，例如 "hold"。
-            speed: 可选关节速度；不传时使用服务端默认速度。
-        """
-        return self._send_and_wait("arms", name, speed=speed)
+        """双臂姿态。报文：{"command":"arms","data":"名称","speed":可选速度}。"""
+        payload = {"command": "arms", "data": name}
+        if speed is not None:
+            payload["speed"] = speed
+        message_json = json.dumps(payload, ensure_ascii=False)
+        print(f"[Minth] MQTT {JOINTS_TOPIC}: {message_json}")
+        info = self._client.publish(JOINTS_TOPIC, message_json, qos=2)
+        return getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS) == mqtt.MQTT_ERR_SUCCESS
 
     def LEFT(self, name, speed=None):
-        """左臂关节运动（仅左臂）。
-
-        Args:
-            name: 动作名称字符串，例如 "A_PLACE_LOOK"。
-            speed: 可选关节速度；不传时使用服务端默认速度。
-        """
-        return self._send_and_wait("left", name, speed=speed)
+        """左臂姿态。报文：{"command":"left","data":"名称","speed":可选速度}。"""
+        payload = {"command": "left", "data": name}
+        if speed is not None:
+            payload["speed"] = speed
+        message_json = json.dumps(payload, ensure_ascii=False)
+        print(f"[Minth] MQTT {JOINTS_TOPIC}: {message_json}")
+        info = self._client.publish(JOINTS_TOPIC, message_json, qos=2)
+        return getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS) == mqtt.MQTT_ERR_SUCCESS
 
     def RIGHT(self, name, speed=None):
-        """右臂关节运动（仅右臂）。
-
-        Args:
-            name: 动作名称字符串，例如 "A_PLACE_LOOK"。
-            speed: 可选关节速度；不传时使用服务端默认速度。
-        """
-        return self._send_and_wait("right", name, speed=speed)
+        """右臂姿态。报文：{"command":"right","data":"名称","speed":可选速度}。"""
+        payload = {"command": "right", "data": name}
+        if speed is not None:
+            payload["speed"] = speed
+        message_json = json.dumps(payload, ensure_ascii=False)
+        print(f"[Minth] MQTT {JOINTS_TOPIC}: {message_json}")
+        info = self._client.publish(JOINTS_TOPIC, message_json, qos=2)
+        return getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS) == mqtt.MQTT_ERR_SUCCESS
 
     def HEAD(self, name):
-        """头部关节运动
-        Args:
-            name: 动作名称字符串，对应 datas/joints/head/{name}.json
-        Returns:
-            bool
-        """
-        return self._send_and_wait("head", name)
+        """头部姿态。报文：{"command":"head","data":"名称"}。"""
+        payload = {"command": "head", "data": name}
+        message_json = json.dumps(payload, ensure_ascii=False)
+        print(f"[Minth] MQTT {JOINTS_TOPIC}: {message_json}")
+        info = self._client.publish(JOINTS_TOPIC, message_json, qos=2)
+        return getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS) == mqtt.MQTT_ERR_SUCCESS
 
     def WAIST(self, name):
-        """腰部关节运动
-        Args:
-            name: 动作名称字符串，对应 datas/joints/waist/{name}.json
-        Returns:
-            bool
-        """
-        return self._send_and_wait("waist", name)
-
-    def OFFSET(self, data):
-        """末端执行器相对移动
-        Args:
-            data: dict，单位毫米，如 {"lx": 20, "ly": 0, "lz": 0,
-                  "rx": 0, "ry": 0, "rz": 0}
-        Returns:
-            bool
-        """
-        return self._send_and_wait("offset_move", data)
-
-    def MoveL(self, position, offset=None):
-        """末端运动到数据库中的坐标点位，可附加相对偏移
-
-        从数据库取出 position 的坐标值，根据 offset 加减后执行到位运动。
-        offset 直接修改目标坐标，而非先到位再偏移。
-
-        Args:
-            position: 坐标点位名称字符串，如 "P1"
-            offset:  可选，相对偏移量（毫米），如 {"lx": 20}、{"ly": 10}、{"lx":10,"ly":10}
-                      lx/ly/lz 对应 X/Y/Z 方向平移，rx/ry/rz 对应旋转（度）
-                      不传时仅执行到位运动
-        Returns:
-            bool: True=运动完成，False=超时或失败
-        """
-        payload = {"command": "goto", "data": {"type": "right", "name": position}}
-        if offset is not None:
-            payload["data"]["offset"] = offset
-        return self._goto_position(position, payload)
-
-    def _goto_position(self, position, payload=None):
-        """发送 goto 命令并等待结果"""
-        if payload is None:
-            payload = {"command": "goto", "data": {"type": "right", "name": position}}
-        msg_str = json.dumps(payload, ensure_ascii=False)
-
-        self._positions_event.clear()
-        self._positions_result = None
-        self._client.publish(POSITIONS_CTRL_TOPIC, msg_str, qos=0)
-        print(f"[Minth] → MoveL: {position}")
-
-        done = self._positions_event.wait(timeout=30)
-        if not done:
-            print(f"[Minth] ✗ MoveL 超时 (30s)")
-            return False
-
-        result = self._positions_result or {}
-        cmd = result.get("command", "")
-        data = result.get("data", {})
-        success = data.get("success", False)
-        message = data.get("message", "")
-        if success:
-            print(f"[Minth] ✓ MoveL: {message}")
-        else:
-            print(f"[Minth] ✗ MoveL: {message}")
-        return success
-
-    def REL(self, data):
-        """底盘相对运动
-        Args:
-            data: dict，单位米，如 {"x": 0.3, "y": 0, "yaw_rad": 0}
-                  x: 前进(+)/后退(-)
-                  y: 左(+)/右(-)
-                  yaw_rad: 左转(+)/右转(-)
-        Returns:
-            bool
-        """
-        return self._send_and_wait("go_rel", data)
-
-    def REL_ODOM(self, data, speed=0.25):
-        """基于里程计闭环执行底盘相对运动。
-
-        Args:
-            data: ``{"x": 0.3, "y": 0.0, "yaw_rad": 0.0}``，距离单位为米、
-                旋转单位为弧度；z 位移不受支持。
-            speed: 线速度上限（m/s），必须大于 0；旋转使用服务端默认角速度。
-        Returns:
-            bool: 服务端处理完成时为 True，超时为 False。
-        """
-        return self._send_and_wait("go_rel_odom", data, speed=speed)
-
-    def REL_NOWAIT(self, data):
-        """底盘相对运动（异步，不等待执行完成）
-
-        后端使用 go_rel_nowait 命令：只发送相对移动请求立即返回，
-        不等待启动、不做到位判断、不等待完成。
-        适用于 fire-and-forget 场景，例如 CHASSIS_CORRECT 纠偏后
-        立即返回继续后续逻辑。
-
-        Args:
-            data: dict，单位米，同 REL
-        Returns:
-            bool: True=命令已成功下发，False=发送失败
-        """
-        payload = {"command": "go_rel_nowait", "data": data}
-        msg_str = json.dumps(payload, ensure_ascii=False)
-        info = self._client.publish(COMMANDS_TOPIC, msg_str, qos=2)
-        ok = getattr(info, "rc", 0) == 0
-        print(f"[Minth] → go_rel (nowait): {data}"
-              f"{'' if ok else ' [发送失败]'}")
-        return ok
-
-    def TTS(self, text):
-        """语音播报
-        Args:
-            text: 要播报的文本字符串
-        Returns:
-            bool
-        """
-        return self._send_and_wait("tts", text)
-
-    def GRIPPER(self, data):
-        """夹爪控制
-        Args:
-            data: dict，如 {"left": 0.5, "right": 0.5}
-                  负值=张开，正值=闭合
-        Returns:
-            bool
-        """
-        return self._send_and_wait("grab", data)
-
-    def YOLO(self, model="wxf.pt", ip=None):
-        """YOLO 目标检测
-
-        拍摄头部彩色+深度图，发送给 YOLO 服务进行检测，等待完成后返回。
-
-        通过 MQTT 向 /humanoid/camera/control 发送 {"command":"detect","yolo":"<model>","yolo_ip":"<ip>"}，
-        camera.py 执行完毕后会向 /humanoid/commands/done 发送 {"command":"done"}。
-
-        Args:
-            model: YOLO 模型文件名，如 "wxf.pt"、"7.14.pt"
-            ip:   可选，自定义 YOLO 检测服务端 IP 地址；
-                  不传或为 None 时使用 camera.py 中的默认配置 YOLO_TCP_HOST
-        Returns:
-            bool: True=检测完成，False=超时
-        """
-        payload = {"command": "detect", "yolo": model}
-        if ip:
-            payload["yolo_ip"] = ip
-        self._done_cmd = None
-        self._done_event.clear()
-        msg_str = json.dumps(payload, ensure_ascii=False)
-        self._client.publish(CAMERA_TOPIC, msg_str, qos=2)
-        print(f"[Minth] → YOLO: model={model}, ip={ip or 'default'}")
-
-        # YOLO 检测耗时较长，使用较长超时；
-        # 只接受 cmd="detect" 的 done，忽略其他命令的 done
-        deadline = time.time() + 120
-        done = False
-        while time.time() < deadline:
-            if self._done_event.wait(timeout=deadline - time.time()):
-                self._done_event.clear()
-                if self._done_cmd == "detect":
-                    done = True
-                    break
-        if done:
-            print(f"[Minth] ✓ YOLO 检测完成")
-        else:
-            print(f"[Minth] ✗ YOLO 超时 (120s)")
-        return done
-
-    def CHASSIS_CORRECT(self, detect_json=None, px_to_meter=None):
-        """底盘水平偏移纠正
-
-        读取 detect/detect.json 中的 horizontal_offset_px 像素值，
-        按转换系数换算为米，执行底盘 Y 方向相对移动。
-
-        转换关系：70 像素 → 向右 130 毫米
-        即 1 像素 → 130/70/1000 ≈ 0.001857 米
-        向右为 y 负方向，故 y_meters = -px * 130/75/1000
-
-        Args:
-            detect_json: 可选，自定义 detect.json 路径；默认使用 ../detect/detect.json
-            px_to_meter: 可选，自定义像素到米的转换系数；默认使用 PX_TO_METER
-        Returns:
-            bool: True=纠正完成，False=超时或无数据
-        """
-        path = detect_json or _DETECT_JSON
-        if not os.path.isfile(path):
-            print(f"[Minth] ✗ CHASSIS_CORRECT: 检测结果文件不存在: {path}")
-            return False
-
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                result = json.load(f)
-        except Exception as e:
-            print(f"[Minth] ✗ CHASSIS_CORRECT: 读取 JSON 失败: {e}")
-            return False
-
-        px = result.get("horizontal_offset_px")
-        if px is None:
-            print(f"[Minth] ✗ CHASSIS_CORRECT: 结果中无 horizontal_offset_px 字段")
-            return False
-
-        try:
-            px = float(px)
-        except (TypeError, ValueError):
-            print(f"[Minth] ✗ CHASSIS_CORRECT: horizontal_offset_px 不是数值: {px}")
-            return False
-
-        coef = px_to_meter if px_to_meter is not None else PX_TO_METER
-        y_meters = px * coef
-        print(f"[Minth] CHASSIS_CORRECT: offset_px={px:.1f}, y_meters={y_meters:.4f}")
-
-        return self._send_and_wait("go_rel", {"x": 0, "y": y_meters, "yaw_rad": 0})
+        """腰部姿态。报文：{"command":"waist","data":"名称"}。"""
+        payload = {"command": "waist", "data": name}
+        message_json = json.dumps(payload, ensure_ascii=False)
+        print(f"[Minth] MQTT {JOINTS_TOPIC}: {message_json}")
+        info = self._client.publish(JOINTS_TOPIC, message_json, qos=2)
+        return getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS) == mqtt.MQTT_ERR_SUCCESS
 
     def JOINT(self, name, offset=None, value=None):
-        """单关节控制
-
-        通过 MQTT 向 /humanoid/joints/control 发送 joint 命令，可增量微调或运动到指定角度。
-
-        Args:
-            name: 关节名，如 "idx11_head_joint1"、"idx01_body_joint1"
-            offset: 增量微调值（弧度），如 0.01
-            value: 目标角度（弧度），如 0.0
-            注意：offset 和 value 二选一，若都提供则使用 value
-        Returns:
-            bool: True=执行完成，False=超时
-        """
+        """单关节命令。报文含 command=joint 和 name/value 或 name/offset。"""
         if value is None and offset is None:
-            print("[Minth] ✗ JOINT: 需要提供 offset 或 value 参数")
+            print("[Minth] JOINT 需要 offset 或 value")
             return False
-
         data = {"name": name}
         if value is not None:
             data["value"] = value
-            print(f"[Minth] → JOINT: {name} value={value}")
         else:
             data["offset"] = offset
-            print(f"[Minth] → JOINT: {name} offset={offset}")
+        payload = {"command": "joint", "data": data}
+        message_json = json.dumps(payload, ensure_ascii=False)
+        print(f"[Minth] MQTT {JOINTS_TOPIC}: {message_json}")
+        info = self._client.publish(JOINTS_TOPIC, message_json, qos=2)
+        return getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS) == mqtt.MQTT_ERR_SUCCESS
 
-        return self._send_and_wait("joint", data)
+    def OFFSET(self, data):
+        """末端偏移。报文：{"command":"offset_move","data":{偏移字段}}。"""
+        payload = {"command": "offset_move", "data": data}
+        message_json = json.dumps(payload, ensure_ascii=False)
+        print(f"[Minth] MQTT {COMMANDS_TOPIC}: {message_json}")
+        info = self._client.publish(COMMANDS_TOPIC, message_json, qos=2)
+        return getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS) == mqtt.MQTT_ERR_SUCCESS
+
+    def REL(self, data):
+        """底盘相对移动。报文：{"command":"go_rel","data":{x,y,yaw_rad}}。"""
+        payload = {"command": "go_rel", "data": data}
+        message_json = json.dumps(payload, ensure_ascii=False)
+        print(f"[Minth] MQTT {COMMANDS_TOPIC}: {message_json}")
+        info = self._client.publish(COMMANDS_TOPIC, message_json, qos=2)
+        return getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS) == mqtt.MQTT_ERR_SUCCESS
+
+    def REL_ODOM(self, data, speed=0.25):
+        """里程计相对移动。报文：{"command":"go_rel_odom","data":...,"speed":...}。"""
+        payload = {"command": "go_rel_odom", "data": data, "speed": speed}
+        message_json = json.dumps(payload, ensure_ascii=False)
+        print(f"[Minth] MQTT {COMMANDS_TOPIC}: {message_json}")
+        info = self._client.publish(COMMANDS_TOPIC, message_json, qos=2)
+        return getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS) == mqtt.MQTT_ERR_SUCCESS
+
+    def REL_NOWAIT(self, data):
+        """异步底盘移动。报文：{"command":"go_rel_nowait","data":...}。"""
+        payload = {"command": "go_rel_nowait", "data": data}
+        message_json = json.dumps(payload, ensure_ascii=False)
+        print(f"[Minth] MQTT {COMMANDS_TOPIC}: {message_json}")
+        info = self._client.publish(COMMANDS_TOPIC, message_json, qos=2)
+        return getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS) == mqtt.MQTT_ERR_SUCCESS
+
+    def TTS(self, text):
+        """语音。报文：{"command":"tts","data":"文本"}。"""
+        payload = {"command": "tts", "data": text}
+        message_json = json.dumps(payload, ensure_ascii=False)
+        print(f"[Minth] MQTT {COMMANDS_TOPIC}: {message_json}")
+        info = self._client.publish(COMMANDS_TOPIC, message_json, qos=2)
+        return getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS) == mqtt.MQTT_ERR_SUCCESS
+
+    def GRIPPER(self, data):
+        """夹爪。报文：{"command":"grab","data":{"left"/"right":位置}}。"""
+        payload = {"command": "grab", "data": data}
+        message_json = json.dumps(payload, ensure_ascii=False)
+        print(f"[Minth] MQTT {COMMANDS_TOPIC}: {message_json}")
+        info = self._client.publish(COMMANDS_TOPIC, message_json, qos=2)
+        return getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS) == mqtt.MQTT_ERR_SUCCESS
+
+    # ── 坐标点位与相机 ─────────────────────────────────────
+
+    def MoveL(self, position, offset=None):
+        """运动到右臂保存位姿，等待 /humanoid/positions/data 结果。"""
+        payload = {"command": "goto", "data": {"type": "right", "name": position}}
+        if offset is not None:
+            payload["data"]["offset"] = offset
+        message_json = json.dumps(payload, ensure_ascii=False)
+        self._positions_event.clear()
+        self._positions_result = None
+        print(f"[Minth] MQTT {POSITIONS_CTRL_TOPIC}: {message_json}")
+        info = self._client.publish(POSITIONS_CTRL_TOPIC, message_json, qos=0)
+        if getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS) != mqtt.MQTT_ERR_SUCCESS:
+            return False
+        if not self._positions_event.wait(timeout=30):
+            print(f"[Minth] MoveL({position}) 超时")
+            return False
+        data = (self._positions_result or {}).get("data", {})
+        print(f"[Minth] MoveL({position}): {data.get('message', '')}")
+        return data.get("success", False)
+
+    def SAVE_PHOTO(self, cameras=None, timeout=20):
+        """保存指定相机图片，等待 save_photo 完成通知。"""
+        if cameras is None:
+            cameras = ["kHeadColor", "kHeadDepth"]
+        if not isinstance(cameras, (list, tuple)) or not cameras:
+            print("[Minth] SAVE_PHOTO 的 cameras 必须是非空列表")
+            return False
+        payload = {"command": "save_photo", "cameras": list(cameras)}
+        message_json = json.dumps(payload, ensure_ascii=False)
+        self._done_cmd = None
+        self._done_event.clear()
+        print(f"[Minth] MQTT {CAMERA_TOPIC}: {message_json}")
+        info = self._client.publish(CAMERA_TOPIC, message_json, qos=2)
+        if getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS) != mqtt.MQTT_ERR_SUCCESS:
+            return False
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self._done_event.wait(timeout=deadline - time.time()):
+                self._done_event.clear()
+                if self._done_cmd == "save_photo":
+                    return True
+        return False
 
     def WAIST_CORRECT(self, detect_json=None, joint_name="idx05_body_joint5"):
-        """腰部旋转纠正
-
-        读取 detect/detect.json 中的 angle_rad 弧度值，
-        执行腰部关节旋转到该角度。
-
-        Args:
-            detect_json: 可选，自定义 detect.json 路径；默认使用 ../detect/detect.json
-            joint_name: 腰部旋转关节名，默认 "idx05_body_joint5"
-        Returns:
-            bool: True=旋转完成，False=超时或无数据
-        """
+        """读取检测角度并直接发布指定腰部关节的增量命令。"""
         path = detect_json or _DETECT_JSON
         if not os.path.isfile(path):
-            print(f"[Minth] ✗ WAIST_CORRECT: 检测结果文件不存在: {path}")
+            print(f"[Minth] 检测结果文件不存在: {path}")
             return False
-
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                result = json.load(f)
-        except Exception as e:
-            print(f"[Minth] ✗ WAIST_CORRECT: 读取 JSON 失败: {e}")
+            with open(path, "r", encoding="utf-8") as source:
+                angle = -float(json.load(source).get("angle_rad"))
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            print(f"[Minth] 读取 angle_rad 失败: {exc}")
             return False
-
-        angle = result.get("angle_rad")*(-1)
-        if angle is None:
-            print(f"[Minth] ✗ WAIST_CORRECT: 结果中无 angle_rad 字段")
-            return False
-
-        try:
-            angle = float(angle)
-        except (TypeError, ValueError):
-            print(f"[Minth] ✗ WAIST_CORRECT: angle_rad 不是数值: {angle}")
-            return False
-
-        print(f"[Minth] WAIST_CORRECT: {joint_name} angle_rad={angle:.4f}")
         return self.JOINT(joint_name, offset=angle)
 
 
-class X2(_RobotBase):
-    """Minth X2 机器人控制类（预留）
-
-    后续实现时，在此添加 X2 专属方法。
-    """
-    pass
-
-
 class Minth:
-    """Minth 机器人命名空间
+    """Minth 命名空间，仅提供 G2 控制类。"""
 
-    用法：
-        robot = Minth.G2()
-        robot.GO(9)
-
-        # X2（预留）
-        # robot = Minth.X2()
-    """
     G2 = G2
-    X2 = X2

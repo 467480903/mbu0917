@@ -52,9 +52,11 @@ fi
 
 # 服务列表：格式 "服务名|启动方式"
 #   humanoid_server : 启动 services/main.py（核心服务）
+#   apriltag_server : 使用项目 .venv-apriltag 启动独立 AprilTag 服务
 #   web_server      : 在 web/ 目录启动 http 服务器
 SERVICES=(
     "humanoid_server|$RUN_DIR/main.py"
+    "apriltag_server|CMD:$PROJECT_DIR/.venv-apriltag/bin/python -u $RUN_DIR/apriltag.py"
     "web_server|CMD:python3 -m http.server 8002|$PROJECT_DIR/web"
 )
 

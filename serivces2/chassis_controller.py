@@ -23,7 +23,7 @@ import sys
 class ChassisController:
     """底盘控制器"""
     
-    def __init__(self, pnc, slam, db, mqtt_client, topic_response, topic_done):
+    def __init__(self, pnc, slam, mqtt_client, topic_response, topic_done):
         """构造函数
         
         Parameters
@@ -32,8 +32,6 @@ class ChassisController:
             GDK Pnc 对象
         slam : agibot_gdk.Slam
             GDK Slam 对象
-        db : DatabaseController
-            数据库控制器
         mqtt_client : mqtt.Client
             MQTT 客户端
         topic_response : str
@@ -43,7 +41,6 @@ class ChassisController:
         """
         self.pnc = pnc
         self.slam = slam
-        self.db = db
         self.mqtt_client = mqtt_client
         self.topic_response = topic_response
         self.topic_done = topic_done
@@ -272,26 +269,21 @@ class ChassisController:
         
         return self._wait_navi_done(timeout)
     
-    def point_move(self, agibot_gdk, name, timeout=120.0):
+    def point_move(self, agibot_gdk, point, timeout=120.0):
         """到点运动
         
         Parameters
         ----------
         agibot_gdk : module
             GDK 模块
-        name : str
-            地图点位名称
+        point : dict
+            地图点位 {position: [x,y,z], orientation: [x,y,z,w], name: str}
         timeout : float
             超时时间（秒）
         """
-        # 从数据库读取点位
-        point = self.db.get_map_point(name)
-        if point is None:
-            print(f"[底盘] 找不到地图点位: {name}")
-            return False
-        
         pos = point["position"]
         ori = point["orientation"]
+        name = point.get("name", "")
         
         print(f"[底盘] 到点运动: {name} ({pos[0]:.3f}, {pos[1]:.3f})")
         
@@ -326,7 +318,7 @@ class ChassisController:
         agibot_gdk : module
             GDK 模块
         points : list
-            地图点位名称列表
+            地图点位列表，每个元素为 {position, orientation, name}
         vel_line : float
             线速度（米/秒）
         vel_rotate_deg : float
@@ -334,19 +326,15 @@ class ChassisController:
         timeout : float
             每个点的超时时间（秒）
         """
-        print(f"[底盘] 多点运动: {' → '.join(points)}")
+        print(f"[底盘] 多点运动: {' → '.join(p.get('name', '') for p in points)}")
         
-        for i, name in enumerate(points):
+        for i, point in enumerate(points):
+            name = point.get("name", "")
             # 最后一个点用 normal_navi（高精度）
             if i == len(points) - 1:
-                ok = self.point_move(agibot_gdk, name, timeout)
+                ok = self.point_move(agibot_gdk, point, timeout)
             else:
                 # 计算到下一个点的相对位置
-                point = self.db.get_map_point(name)
-                if point is None:
-                    print(f"[底盘] 找不到点位: {name}")
-                    return False
-                
                 current = self._get_current_pose()
                 dx = (point["position"][0] - current["x"]) * 1000  # 米 → 毫米
                 dy = (point["position"][1] - current["y"]) * 1000

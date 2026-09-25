@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数据库测试 - 地图点位</title>
+<link rel="stylesheet" href="../../bootstrap.min.css">
+<style>
+body { padding: 20px; max-width: 960px; margin: 0 auto; }
+.log { background:#f8f9fa; border:1px solid #dee2e6; border-radius:4px; padding:10px; height:220px; overflow-y:auto; font-family:monospace; font-size:13px; white-space:pre-wrap; }
+pre#listArea { background:#f8f9fa; padding:10px; border-radius:4px; max-height:280px; overflow:auto; }
+.dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:4px; }
+.dot.on { background:#28a745; } .dot.off { background:#dc3545; }
+</style>
+</head>
+<body>
+<h3>数据库测试 - 地图点位</h3>
+<p class="text-muted mb-3">前置：先运行 <code>python3 test/services2/test_db_service.py</code><br>
+连接状态：<span class="dot off" id="dot"></span><span id="mqttStatus">未连接</span></p>
+
+<div class="card mb-3">
+  <div class="card-header">增 / 改</div>
+  <div class="card-body">
+    <div class="row g-2">
+      <div class="col-4"><label>名称</label><input id="name" class="form-control" placeholder="p1"></div>
+      <div class="col-4"><label>位置 position [x,y,z]</label><input id="position" class="form-control" value="[0,0,0]"></div>
+      <div class="col-4"><label>姿态 orientation [x,y,z,w]</label><input id="orientation" class="form-control" value="[0,0,0,1]"></div>
+    </div>
+    <div class="mt-2"><button class="btn btn-primary" onclick="doAdd()">增</button> <button class="btn btn-warning" onclick="doUpdate()">改</button></div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">删 / 运动到位置 / 读取</div>
+  <div class="card-body">
+    <div class="row g-2">
+      <div class="col-6"><label>名称</label><input id="dname" class="form-control" placeholder="p1"></div>
+      <div class="col-6 d-flex align-items-end">
+        <button class="btn btn-danger me-2" onclick="doDelete()">删</button>
+        <button class="btn btn-success me-2" onclick="doMove()">运动到位置</button>
+        <button class="btn btn-info" onclick="doGet()">读取所有</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card"><div class="card-header">数据列表（按名称排序）</div><div class="card-body"><pre id="listArea">（空）</pre></div></div>
+<div class="card mt-3"><div class="card-header">MQTT 响应日志</div><div class="card-body"><div class="log" id="logArea"></div></div></div>
+
+<script src="../../paho-mqtt.min.js"></script>
+<script>
+const BROKER = location.hostname || '10.2.236.6';
+const PORT = 9001;
+const REQ = '/humanoid/db/request/';
+const RESP = '/humanoid/db/response/';
+let client = null;
+function log(s){var el=document.getElementById('logArea');el.textContent+='['+new Date().toLocaleTimeString()+'] '+s+'\n';el.scrollTop=el.scrollHeight;}
+function setStatus(ok){document.getElementById('mqttStatus').textContent=ok?'已连接':'未连接';document.getElementById('dot').className='dot '+(ok?'on':'off');}
+function connect(){
+  client=new Paho.Client(BROKER,PORT,'db_map_'+Math.random().toString(16).substr(2,8));
+  client.onConnectionLost=function(r){if(r.errorCode!==0){setStatus(false);log('连接丢失: '+r.errorMessage);}};
+  client.onMessageArrived=function(m){try{var d=JSON.parse(m.payloadString);log('响应: '+m.payloadString);if(d.cmd==='getMapPoints'){document.getElementById('listArea').textContent=JSON.stringify(d.result,null,2);}}catch(e){log('非法响应: '+m.payloadString);}};
+  client.connect({onSuccess:function(){setStatus(true);log('已连接 '+BROKER+':'+PORT);client.subscribe(RESP,{qos:2});},onFailure:function(e){setStatus(false);log('连接失败: '+e.errorMessage);}});
+}
+function send(obj){if(!client||!client.isConnected()){log('未连接，无法发送');return false;}var m=new Paho.Message(JSON.stringify(obj));m.destinationName=REQ;m.qos=2;client.send(m);log('发送: '+JSON.stringify(obj));return true;}
+function parseArr(s){try{var v=JSON.parse(s.trim());if(!Array.isArray(v)){throw 0;}return v;}catch(e){alert('必须是合法 JSON 数组');return null;}}
+function doAdd(){var pos=parseArr(document.getElementById('position').value);var ori=parseArr(document.getElementById('orientation').value);if(!pos||!ori)return;send({cmd:'addMapPoint',name:document.getElementById('name').value.trim(),position:pos,orientation:ori});}
+function doUpdate(){var pos=parseArr(document.getElementById('position').value);var ori=parseArr(document.getElementById('orientation').value);if(!pos||!ori)return;send({cmd:'updateMapPoint',name:document.getElementById('name').value.trim(),position:pos,orientation:ori});}
+function doDelete(){var n=document.getElementById('dname').value.trim();if(!n){alert('请输入名称');return;}send({cmd:'deleteMapPoint',name:n});}
+function doMove(){var n=document.getElementById('dname').value.trim();if(!n){alert('请输入名称');return;}if(!confirm('确认运动到地图点位「'+n+'」？机器将运动！'))return;send({cmd:'moveMapPoint',name:n});}
+function doGet(){send({cmd:'getMapPoints'});}
+connect();
+</script>
+</body>
+</html>

@@ -16,15 +16,13 @@ import threading
 class PoseController:
     """位姿控制器"""
     
-    def __init__(self, robot, db, mqtt_client, topic_response, topic_done):
+    def __init__(self, robot, mqtt_client, topic_response, topic_done):
         """构造函数
         
         Parameters
         ----------
         robot : agibot_gdk.Robot
             GDK Robot 对象
-        db : DatabaseController
-            数据库控制器
         mqtt_client : mqtt.Client
             MQTT 客户端
         topic_response : str
@@ -33,7 +31,6 @@ class PoseController:
             完成信号主题
         """
         self.robot = robot
-        self.db = db
         self.mqtt_client = mqtt_client
         self.topic_response = topic_response
         self.topic_done = topic_done
@@ -392,53 +389,6 @@ class PoseController:
             }
             
             return self.move_both_arms(agibot_gdk, target_l, target_r)
-    
-    def goto_position(self, agibot_gdk, ptype, name):
-        """从数据库读取位姿并运动"""
-        positions = self.db.get_positions(ptype)
-        if not positions:
-            print(f"[位姿] 找不到位姿: {ptype}/{name}")
-            return False
-        
-        pos_data = None
-        for row in positions:
-            if row["name"] == name:
-                pos_data = row["value"]
-                break
-        
-        if pos_data is None:
-            print(f"[位姿] 找不到位姿: {ptype}/{name}")
-            return False
-        
-        if ptype == "left":
-            position = [pos_data.get("x", 0), pos_data.get("y", 0), pos_data.get("z", 0)]
-            qx, qy, qz = pos_data.get("rx", 0), pos_data.get("ry", 0), pos_data.get("rz", 0)
-            qw = math.sqrt(max(0, 1 - qx*qx - qy*qy - qz*qz))
-            orientation = [qx, qy, qz, qw]
-            return self.move_left_arm(agibot_gdk, position, orientation)
-        
-        elif ptype == "right":
-            position = [pos_data.get("x", 0), pos_data.get("y", 0), pos_data.get("z", 0)]
-            qx, qy, qz = pos_data.get("rx", 0), pos_data.get("ry", 0), pos_data.get("rz", 0)
-            qw = math.sqrt(max(0, 1 - qx*qx - qy*qy - qz*qz))
-            orientation = [qx, qy, qz, qw]
-            return self.move_right_arm(agibot_gdk, position, orientation)
-        
-        elif ptype == "both":
-            left_data = pos_data.get("left", {})
-            right_data = pos_data.get("right", {})
-            
-            left_target = {
-                "position": [left_data.get("x", 0), left_data.get("y", 0), left_data.get("z", 0)],
-                "orientation": self._recover_quat(left_data)
-            }
-            right_target = {
-                "position": [right_data.get("x", 0), right_data.get("y", 0), right_data.get("z", 0)],
-                "orientation": self._recover_quat(right_data)
-            }
-            return self.move_both_arms(agibot_gdk, left_target, right_target)
-        
-        return False
     
     @staticmethod
     def _recover_quat(data):

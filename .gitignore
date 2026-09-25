@@ -9,3 +9,5 @@ dds_view.*
 services/scene_control.*
 __pycache__/
 images/
+.venv-apriltag/
+.venv-sync/

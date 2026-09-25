@@ -30,24 +30,24 @@
 
 ### 1. 数据库控制器 `database_controller.py`
 
-- **不涉及运动**，使用默认系统 Python，**不依赖 GDK/MQTT**。
-- 构造函数：`DatabaseController(db_path)`
-- 核心方法 `init()`：从文件加载到内存 SQLite（`:memory:`），写操作后 `_sync_to_file()` 同步回文件，保证数据持久化。
-- 数据表：`joints`、`positions`、`map_points`（均含 `UNIQUE` 约束，写操作为 upsert）。
-- 主要方法：
-  - 关节：`get_joints(jtype=None)` / `save_joints(jtype, name, value)` / `delete_joints(jtype, name)`
-  - 位姿：`get_positions(ptype=None)` / `save_positions(ptype, name, value)` / `delete_positions(ptype, name)`
-  - 地图点位：`get_map_points()` / `get_map_point(name)` / `save_map_point(name, position, orientation, source='local')` / `delete_map_point(name)`
+- **不涉及运动**，使用默认系统 Python；引用 关节/位姿/底盘 三个控制器（可选注入）用于「运动到位置」。
+- 构造函数：`DatabaseController(db_path, joint_controller=None, pose_controller=None, chassis_controller=None)`
+- 核心方法 `init()`：从文件加载到内存 SQLite（`:memory:`），写操作后 `_sync_to_file()` 同步回文件。
+- 数据表：`joints`、`positions`、`map_points`；每类数据实现 增(add)/删(delete)/改(update)/读取所有(get_all)/运动到位置(move)，无查询功能，数据一律按名称字符排序。
+- 主要方法（以关节为例，位姿/地图点位同构）：
+  - `add_joints(type, name, value)` / `update_joints(type, name, value)` / `delete_joints(type, name)`
+  - `get_joints()` — 读取所有（按名称排序）
+  - `move_joints(name)` — 运动到位置（委托关节控制器，禁止自动化测试）
 
 ### 2. 底盘控制器 `chassis_controller.py`
 
-- 构造函数：`ChassisController(pnc, slam, db, mqtt_client, topic_response, topic_done)`
+- 构造函数：`ChassisController(pnc, slam, mqtt_client, topic_response, topic_done)`（不引用数据库控制器）
 - 既支持**蟹行斜走**，也支持 **Ackermann 方式转弯**，以及前后直行。
 - 单位约定：x/y 为毫米，rotate 为角度，vel_line 为米/秒，vel_rotate 为度/秒。
 - 主要方法：
   - `relative_move(agibot_gdk, x_mm, y_mm, rotate_deg, timeout)` — 基于 GDK `relative_move`，内部 `while` 判断到位。
-  - `point_move(agibot_gdk, name, timeout)` — 从数据库读取点位，使用 GDK `normal_navi`（支持到点重定位），非阻塞下发后循环判断到达。
-  - `points_move(agibot_gdk, points, vel_line, vel_rotate_deg, timeout)` — 多点依次导航；**最后一个点用 `normal_navi` 走精度，其余点用 `relative2_move` 走**。
+  - `point_move(agibot_gdk, point, timeout)` — 接收点位字典 `{position, orientation, name}`，使用 GDK `normal_navi`（支持到点重定位），非阻塞下发后循环判断到达。
+  - `points_move(agibot_gdk, points, vel_line, vel_rotate_deg, timeout)` — points 为点位字典列表，多点依次导航；**最后一个点用 `normal_navi` 走精度，其余点用 `relative2_move` 走**。
   - `relative2_move(...)` — 带速度参数的相对运动：先转角（`vel_rotate`）→ 蟹行直线（分 12 段：前 4 段加速、中 4 段匀速、后 4 段减速，队列式执行）→ 到位后最终转角。
   - `stop(agibot_gdk)` — 立即停止底盘。
 - 内部辅助：`_task_state`、`_cancel_navi`、`_request_chassis`、`_make_twist`、`_stop_chassis`、`_wait_stop`、`_wait_navi_done`、`_rotate_to`、`_move_line`、`_get_current_pose` 等。
@@ -67,7 +67,7 @@
 
 ### 4. 位姿控制器 `pose_controller.py`
 
-- 构造函数：`PoseController(robot, db, mqtt_client, topic_response, topic_done)`
+- 构造函数：`PoseController(robot, mqtt_client, topic_response, topic_done)`（不引用数据库控制器）
 - 控制左右手末端在世界坐标系的绝对位姿；支持左右手/左手/右手/腰部（上下前后）4 种运动方式。
 - 数学工具：`slerp`（四元数球面插值）、`euler_to_quaternion`、`quaternion_multiply`、`distance`。
 - 主要方法：
@@ -75,7 +75,6 @@
   - `move_both_arms(agibot_gdk, left_target, right_target)`
   - `move_relative(agibot_gdk, side, offset, rotation)`
   - `move_waist(agibot_gdk, offset)` — 通过双臂联动实现腰部上下前后
-  - `goto_position(agibot_gdk, ptype, name)` — 从数据库读取位姿并运动
   - `get_current_pose(side)`
 - 内部辅助：`_find_pose`、`_n_steps`、`_plan`、`_send_trajectory`、`_send_dual_trajectory`、`_hold_at_pose`、`_recover_quat`。
 

@@ -383,7 +383,7 @@ class SyncController:
         for i, addr in enumerate(dev["read_holdings"]):
             name = read_names[i] if i < len(read_names) else None
             val = values.get(addr)
-            if name:
+            if name and val is not None:
                 self._update_read(name, val)
             result.append({"name": name, "address": addr, "value": val})
         return result

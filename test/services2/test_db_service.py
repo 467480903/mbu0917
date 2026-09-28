@@ -9,8 +9,11 @@ test_db_service.py — 数据库控制器服务启动程序（供 .sh 观察脚�
   - 把结果发布到 /humanoid/db/response/
 
 运行（默认系统 python，需 paho-mqtt）：
-  python3 test/services2/test_db_service.py [数据库路径]
+  python3 test/services2/test_db_service.py [数据库路径] [broker] [port] [ws]
   # 默认使用 /tmp 下的临时测试库，不污染 datas/robot_data.db
+  # 默认连接 10.20.17.77:1883 (TCP)；第 3 个参数传 ws 则走 WebSocket（路径 /mqtt）
+  #   例：python3 test/services2/test_db_service.py /tmp/test.db 127.0.0.1 9111      # TCP
+  #       python3 test/services2/test_db_service.py /tmp/test.db 10.20.17.77 9001 ws # WS
 """
 
 import os
@@ -22,7 +25,7 @@ import paho.mqtt.client as mqtt
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../serivces2'))
 from database_controller import DatabaseController
 
-BROKER = "localhost"
+BROKER = "10.20.17.77"
 PORT = 1883
 REQ_TOPIC = "/humanoid/db/request/"
 RESP_TOPIC = "/humanoid/db/response/"
@@ -78,6 +81,7 @@ def dispatch(db, p):
 
 def on_message(client, userdata, msg):
     db = userdata
+    print(msg)
     try:
         p = json.loads(msg.payload.decode("utf-8"))
     except Exception as e:
@@ -90,12 +94,30 @@ def on_message(client, userdata, msg):
 
 
 def main():
-    db_path = sys.argv[1] if len(sys.argv) > 1 else os.path.join("/tmp", "database_test.db")
+    # 用法: python3 test_db_service.py [数据库路径] [broker] [port] [ws]
+    #   默认:             /tmp/database_test.db + 10.20.17.77:1883 (TCP)
+    #   指定 broker/port:  python3 test_db_service.py /tmp/test.db 127.0.0.1 9111
+    #   WebSocket 模式:    python3 test_db_service.py /tmp/test.db 10.20.17.77 9001 ws
+    global BROKER, PORT
+    args = sys.argv[1:]
+    db_path = args[0] if len(args) > 0 else os.path.join("/tmp", "database_test.db")
+    if len(args) > 1:
+        BROKER = args[1]
+    if len(args) > 2:
+        PORT = int(args[2])
+    use_ws = len(args) > 3 and args[3].lower() in ("ws", "websocket", "websockets")
+
     db = DatabaseController(db_path)
     db.init()
 
-    client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
-                         client_id=f"humanoid_db_{os.getpid()}")
+    if use_ws:
+        client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+                             client_id=f"humanoid_db_{os.getpid()}",
+                             transport="websockets")
+        client.ws_set_options(path="/mqtt")
+    else:
+        client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+                             client_id=f"humanoid_db_{os.getpid()}")
     client.user_data_set(db)
     client.on_connect = on_connect
     client.on_message = on_message

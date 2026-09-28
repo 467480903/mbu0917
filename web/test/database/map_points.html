@@ -49,26 +49,146 @@ pre#listArea { background:#f8f9fa; padding:10px; border-radius:4px; max-height:2
 
 <script src="../../paho-mqtt.min.js"></script>
 <script>
+'use strict';
+
 const BROKER = location.hostname || '10.2.236.6';
 const PORT = 9001;
-const REQ = '/humanoid/db/request/';
-const RESP = '/humanoid/db/response/';
-let client = null;
-function log(s){var el=document.getElementById('logArea');el.textContent+='['+new Date().toLocaleTimeString()+'] '+s+'\n';el.scrollTop=el.scrollHeight;}
-function setStatus(ok){document.getElementById('mqttStatus').textContent=ok?'已连接':'未连接';document.getElementById('dot').className='dot '+(ok?'on':'off');}
-function connect(){
-  client=new Paho.Client(BROKER,PORT,'db_map_'+Math.random().toString(16).substr(2,8));
-  client.onConnectionLost=function(r){if(r.errorCode!==0){setStatus(false);log('连接丢失: '+r.errorMessage);}};
-  client.onMessageArrived=function(m){try{var d=JSON.parse(m.payloadString);log('响应: '+m.payloadString);if(d.cmd==='getMapPoints'){document.getElementById('listArea').textContent=JSON.stringify(d.result,null,2);}}catch(e){log('非法响应: '+m.payloadString);}};
-  client.connect({onSuccess:function(){setStatus(true);log('已连接 '+BROKER+':'+PORT);client.subscribe(RESP,{qos:2});},onFailure:function(e){setStatus(false);log('连接失败: '+e.errorMessage);}});
+const REQUEST_TOPIC = '/humanoid/db/request/';
+const RESPONSE_TOPIC = '/humanoid/db/response/';
+
+let mqttClient = null;
+
+// ---------- DOM 工具 ----------
+function byId(id) {
+    return document.getElementById(id);
 }
-function send(obj){if(!client||!client.isConnected()){log('未连接，无法发送');return false;}var m=new Paho.Message(JSON.stringify(obj));m.destinationName=REQ;m.qos=2;client.send(m);log('发送: '+JSON.stringify(obj));return true;}
-function parseArr(s){try{var v=JSON.parse(s.trim());if(!Array.isArray(v)){throw 0;}return v;}catch(e){alert('必须是合法 JSON 数组');return null;}}
-function doAdd(){var pos=parseArr(document.getElementById('position').value);var ori=parseArr(document.getElementById('orientation').value);if(!pos||!ori)return;send({cmd:'addMapPoint',name:document.getElementById('name').value.trim(),position:pos,orientation:ori});}
-function doUpdate(){var pos=parseArr(document.getElementById('position').value);var ori=parseArr(document.getElementById('orientation').value);if(!pos||!ori)return;send({cmd:'updateMapPoint',name:document.getElementById('name').value.trim(),position:pos,orientation:ori});}
-function doDelete(){var n=document.getElementById('dname').value.trim();if(!n){alert('请输入名称');return;}send({cmd:'deleteMapPoint',name:n});}
-function doMove(){var n=document.getElementById('dname').value.trim();if(!n){alert('请输入名称');return;}if(!confirm('确认运动到地图点位「'+n+'」？机器将运动！'))return;send({cmd:'moveMapPoint',name:n});}
-function doGet(){send({cmd:'getMapPoints'});}
+
+function log(message) {
+    const el = byId('logArea');
+    el.textContent += '[' + new Date().toLocaleTimeString() + '] ' + message + '\n';
+    el.scrollTop = el.scrollHeight;
+}
+
+function setConnectionStatus(connected) {
+    byId('mqttStatus').textContent = connected ? '已连接' : '未连接';
+    byId('dot').className = 'dot ' + (connected ? 'on' : 'off');
+}
+
+// ---------- MQTT ----------
+function connect() {
+    mqttClient = new Paho.Client(
+        BROKER,
+        PORT,
+        'db_map_' + Math.random().toString(16).substr(2, 8)
+    );
+
+    mqttClient.onConnectionLost = function (response) {
+        if (response.errorCode !== 0) {
+            setConnectionStatus(false);
+            log('连接丢失: ' + response.errorMessage);
+        }
+    };
+
+    mqttClient.onMessageArrived = function (message) {
+        try {
+            const data = JSON.parse(message.payloadString);
+            log('响应: ' + message.payloadString);
+            if (data.cmd === 'getMapPoints') {
+                byId('listArea').textContent = JSON.stringify(data.result, null, 2);
+            }
+        } catch (error) {
+            log('非法响应: ' + message.payloadString);
+        }
+    };
+
+    mqttClient.connect({
+        onSuccess: function () {
+            setConnectionStatus(true);
+            log('已连接 ' + BROKER + ':' + PORT);
+            mqttClient.subscribe(RESPONSE_TOPIC, { qos: 0 });
+        },
+        onFailure: function (error) {
+            setConnectionStatus(false);
+            log('连接失败: ' + error.errorMessage);
+        }
+    });
+}
+
+function publish(payload) {
+    if (!mqttClient || !mqttClient.isConnected()) {
+        log('未连接，无法发送');
+        return false;
+    }
+    const message = new Paho.Message(JSON.stringify(payload));
+    message.destinationName = REQUEST_TOPIC;
+    message.qos = 0;
+    mqttClient.send(message);
+    log('发送: ' + JSON.stringify(payload));
+    return true;
+}
+
+// ---------- 表单解析 ----------
+function readArray(text) {
+    try {
+        const value = JSON.parse(text.trim());
+        if (!Array.isArray(value)) {
+            throw new Error('not an array');
+        }
+        return value;
+    } catch (error) {
+        alert('必须是合法 JSON 数组');
+        return null;
+    }
+}
+
+// ---------- 按钮操作 ----------
+function doAdd() {
+    const position = readArray(byId('position').value);
+    const orientation = readArray(byId('orientation').value);
+    if (position === null || orientation === null) return;
+    publish({
+        cmd: 'addMapPoint',
+        name: byId('name').value.trim(),
+        position: position,
+        orientation: orientation
+    });
+}
+
+function doUpdate() {
+    const position = readArray(byId('position').value);
+    const orientation = readArray(byId('orientation').value);
+    if (position === null || orientation === null) return;
+    publish({
+        cmd: 'updateMapPoint',
+        name: byId('name').value.trim(),
+        position: position,
+        orientation: orientation
+    });
+}
+
+function doDelete() {
+    const name = byId('dname').value.trim();
+    if (!name) {
+        alert('请输入名称');
+        return;
+    }
+    publish({ cmd: 'deleteMapPoint', name: name });
+}
+
+function doMove() {
+    const name = byId('dname').value.trim();
+    if (!name) {
+        alert('请输入名称');
+        return;
+    }
+    if (!confirm('确认运动到地图点位「' + name + '」？机器将运动！')) return;
+    publish({ cmd: 'moveMapPoint', name: name });
+}
+
+function doGet() {
+    publish({ cmd: 'getMapPoints' });
+}
+
 connect();
 </script>
 </body>

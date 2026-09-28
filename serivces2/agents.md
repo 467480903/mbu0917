@@ -127,3 +127,24 @@
 
 在目录 web/test/database  中， 创建一些功能单一的网页, 只要  .html 的文件， 不要创建 额外的 .js 文件， js 脚本放在 .html 文件里面， 可以实现各类数据的增删改功能。 网页上可以把  运动到位置  这类功能按钮加上 ， 方便我人工手动触发按钮来做测试
 
+注意要禁用 mqtt 的 .acl 功能， 类似：
+
+```
+sudo more robot-web-console.conf 
+```
+
+
+```
+per_listener_settings true
+
+listener 1883 0.0.0.0
+protocol mqtt
+allow_anonymous true
+
+listener 9001
+protocol websockets
+allow_anonymous true
+#acl_file /etc/mosquitto/acl/robot-web-console.acl
+max_connections 20
+```
+

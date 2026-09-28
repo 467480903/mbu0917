@@ -110,7 +110,7 @@ function connect() {
         onSuccess: function () {
             setConnectionStatus(true);
             log('已连接 ' + BROKER + ':' + PORT);
-            mqttClient.subscribe(RESPONSE_TOPIC, { qos: 2 });
+            mqttClient.subscribe(RESPONSE_TOPIC, { qos: 0 });
         },
         onFailure: function (error) {
             setConnectionStatus(false);
@@ -126,7 +126,7 @@ function publish(payload) {
     }
     const message = new Paho.Message(JSON.stringify(payload));
     message.destinationName = REQUEST_TOPIC;
-    message.qos = 2;
+    message.qos = 0;
     mqttClient.send(message);
     log('发送: ' + JSON.stringify(payload));
     return true;

@@ -17,6 +17,7 @@
 | `interaction_controller.py` | 控制器 | TTS 语音输出 |
 | `camera_controller.py` | 控制器 | 头部彩色/深度、左右手腕相机拍照与图像流 |
 | `apriltag_controller.py` | 控制器 | Apriltag 图片识别解析 |
+| `status_publisher.py` | 控制器 | 状态发布器（10Hz 发布关节/末端位姿/夹爪/底盘坐标） |
 | `README.md` | 文档 | 本说明 |
 
 ## 整体架构
@@ -112,6 +113,20 @@
   - `detect_image(image)` / `detect_file(filepath)` / `detect_saved_image(filename)`
   - 静态辅助：`_rotmat_to_quat(R)`
 
+### 9. 状态发布器 `status_publisher.py`
+
+- 构造函数：`StatusPublisher(robot, slam, mqtt_client, topic_status, rate_hz=10.0)`
+- **纯粹的 publisher**，往 MQTT 上持续发布状态，不接收命令、不运动；参考 `services/status.py`，但归整为一个类。
+- 默认 **10Hz** 发布到 `/humanoid/status/data/`，报文包含：
+  - `joints`：全身所有关节的当前转角
+  - `left_ee` / `right_ee`：左右手末端位姿（`position` + `orientation`）
+  - `left_gripper` / `right_gripper`：左右手夹爪开合程度
+  - `chassis`：底盘地图坐标（底盘未初始化/地图未重定位时为 `null`）
+- 主要方法：
+  - `read_joints()` / `read_end_effector_poses()` / `read_grippers()` / `read_chassis()`
+  - `build_message()` / `publish_once()`
+  - `start()` / `stop()`（后台线程，按 `rate_hz` 周期发布）
+
 ## 配置文件 `config.json`
 
 ```json
@@ -126,6 +141,7 @@
     "camera":   { "request": "/humanoid/camera/request/",   "response": "/humanoid/camera/response/" },
     "apriltag": { "request": "/humanoid/apriltag/request/", "response": "/humanoid/apriltag/response/" },
     "db":       { "request": "/humanoid/db/request/",       "response": "/humanoid/db/response/" },
+    "status":   { "data": "/humanoid/status/data/" },
     "done": "/humanoid/done/"
   },
   "paths": { "datas": "datas", "images": "images", "detect": "detect" }
@@ -156,6 +172,10 @@
 | `test_camera_controller.py` | 摄像头 | 是（需 GDK 环境） |
 | `test_interaction_controller.py` | TTS | 是（需 GDK 环境） |
 | `test_apriltag_controller.py` | Apriltag | 是（.venv-apriltag 环境） |
+| `test_status_service.py` | 状态发布器（服务） | 是（需 GDK 环境，不运动） |
+| `test_status_observer.sh` | 状态发布器（观察） | 是（`mosquitto_sub`） |
+
+网页测试：`web/test/status.html` 通过 MQTT-over-WebSocket（`9001`）订阅 `/humanoid/status/data/`，实时显示关节转角、左右末端位姿、夹爪开合与底盘坐标。
 
 ### 测试要求（来自 `agents.md`）
 

@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>状态发布器 - 实时状态</title>
+<link rel="stylesheet" href="../bootstrap.min.css">
+<style>
+body { padding: 20px; max-width: 1200px; margin: 0 auto; }
+.dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:4px; }
+.dot.on { background:#28a745; } .dot.off { background:#dc3545; }
+.kv { font-family: monospace; font-size: 14px; }
+.card { margin-bottom: 16px; }
+table td, table th { font-family: monospace; font-size: 13px; vertical-align: middle; }
+#jointsBody { max-height: 420px; }
+.joint-row td:first-child { color:#495057; }
+</style>
+</head>
+<body>
+<h3>状态发布器 - 实时状态</h3>
+<p class="text-muted mb-3">前置：先运行 <code>python3 test/services2/test_status_service.py</code><br>
+连接状态：<span class="dot off" id="dot"></span><span id="mqttStatus">未连接</span>
+<span class="ms-3">主题：<code>/humanoid/status/data/</code></span>
+<span class="ms-3">最后更新：<span id="timestamp" class="kv">--</span></span></p>
+
+<div class="card">
+  <div class="card-header">底盘地图坐标（未初始化时为 null）</div>
+  <div class="card-body kv" id="chassisArea">等待数据...</div>
+</div>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">左手末端位姿 + 夹爪</div>
+      <div class="card-body kv" id="leftArea">等待数据...</div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">右手末端位姿 + 夹爪</div>
+      <div class="card-body kv" id="rightArea">等待数据...</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">全身关节转角（<span id="jointCount">0</span> 个）</div>
+  <div class="card-body p-0">
+    <div style="max-height:420px; overflow-y:auto;">
+      <table class="table table-striped table-sm mb-0">
+        <thead><tr><th style="position:sticky;top:0;background:#fff;">关节名</th><th style="position:sticky;top:0;background:#fff;">当前转角</th></tr></thead>
+        <tbody id="jointsBody"><tr><td colspan="2" class="text-muted">等待数据...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="../paho-mqtt.min.js"></script>
+<script>
+'use strict';
+
+const BROKER = location.hostname || 'localhost';
+const PORT = 9001;
+const STATUS_TOPIC = '/humanoid/status/data/';
+
+let mqttClient = null;
+
+function byId(id) { return document.getElementById(id); }
+
+function setConnectionStatus(connected) {
+    byId('mqttStatus').textContent = connected ? '已连接' : '未连接';
+    byId('dot').className = 'dot ' + (connected ? 'on' : 'off');
+}
+
+function fmt(v) {
+    if (v === null || v === undefined) return 'null';
+    if (typeof v === 'number') return Number(v).toFixed(4);
+    return String(v);
+}
+
+function fmtArr(arr) {
+    if (!Array.isArray(arr)) return 'null';
+    return '[' + arr.map(fmt).join(', ') + ']';
+}
+
+function renderChassis(chassis) {
+    const el = byId('chassisArea');
+    if (!chassis) {
+        el.textContent = 'null（底盘未初始化 / 地图未重定位）';
+        return;
+    }
+    el.innerHTML =
+        'x = ' + fmt(chassis.x) + ' m<br>' +
+        'y = ' + fmt(chassis.y) + ' m<br>' +
+        'z = ' + fmt(chassis.z) + ' m<br>' +
+        'yaw = ' + fmt(chassis.yaw) + ' rad<br>' +
+        'loc_state = ' + fmt(chassis.loc_state) + '<br>' +
+        'loc_confidence = ' + fmt(chassis.loc_confidence);
+}
+
+function renderEe(el, pose, gripper) {
+    if (!pose) {
+        el.innerHTML = '位姿：null<br>夹爪开合：' + fmt(gripper);
+        return;
+    }
+    el.innerHTML =
+        'position = ' + fmtArr(pose.position) + ' m<br>' +
+        'orientation = ' + fmtArr(pose.orientation) + '<br>' +
+        '夹爪开合 = ' + fmt(gripper);
+}
+
+function renderJoints(joints) {
+    const body = byId('jointsBody');
+    const names = Object.keys(joints || {}).sort();
+    byId('jointCount').textContent = names.length;
+    if (names.length === 0) {
+        body.innerHTML = '<tr><td colspan="2" class="text-muted">（无关节数据）</td></tr>';
+        return;
+    }
+    let html = '';
+    for (const name of names) {
+        html += '<tr class="joint-row"><td>' + name + '</td><td>' + fmt(joints[name]) + ' rad</td></tr>';
+    }
+    body.innerHTML = html;
+}
+
+function handleStatus(data) {
+    byId('timestamp').textContent = data.timestamp || '--';
+    renderChassis(data.chassis);
+    renderEe(byId('leftArea'), data.left_ee, data.left_gripper);
+    renderEe(byId('rightArea'), data.right_ee, data.right_gripper);
+    renderJoints(data.joints);
+}
+
+function connect() {
+    mqttClient = new Paho.Client(
+        BROKER,
+        PORT,
+        'status_view_' + Math.random().toString(16).substr(2, 8)
+    );
+
+    mqttClient.onConnectionLost = function (response) {
+        if (response.errorCode !== 0) {
+            setConnectionStatus(false);
+        }
+    };
+
+    mqttClient.onMessageArrived = function (message) {
+        if (message.destinationName !== STATUS_TOPIC) return;
+        try {
+            handleStatus(JSON.parse(message.payloadString));
+        } catch (error) {
+            /* 忽略非法报文 */
+        }
+    };
+
+    mqttClient.connect({
+        onSuccess: function () {
+            setConnectionStatus(true);
+            mqttClient.subscribe(STATUS_TOPIC, { qos: 0 });
+        },
+        onFailure: function (error) {
+            setConnectionStatus(false);
+        }
+    });
+}
+
+connect();
+</script>
+</body>
+</html>

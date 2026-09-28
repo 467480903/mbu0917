@@ -36,6 +36,9 @@
       "request": "/humanoid/db/request/",
       "response": "/humanoid/db/response/"
     },
+    "status": {
+      "data": "/humanoid/status/data/"
+    },
     "done": "/humanoid/done/"
   },
   "paths": {

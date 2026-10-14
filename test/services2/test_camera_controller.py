@@ -33,7 +33,6 @@ from camera_controller import CameraController
 
 # 初始化 GDK
 agibot_gdk.gdk_init()
-camera = agibot_gdk.Camera()
 
 # 初始化 MQTT
 mqtt_client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
@@ -41,10 +40,10 @@ mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
 mqtt_client.loop_start()
 
 # 创建控制器
-ctrl = CameraController(camera, mqtt_client, TOPIC_CAMERA_RESPONSE, IMAGE_SAVE_DIR)
+ctrl = CameraController(agibot_gdk, mqtt_client, TOPIC_CAMERA_RESPONSE, IMAGE_SAVE_DIR)
 
 # 测试拍照
-filename = ctrl.capture(agibot_gdk, "kHeadColor")
+filename = ctrl.capture("kHeadColor")
 print(f"拍照结果: {filename}")
 
 mqtt_client.loop_stop()

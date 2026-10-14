@@ -33,7 +33,6 @@ from end_effector_controller import EndEffectorController
 
 # 初始化 GDK
 agibot_gdk.gdk_init()
-robot = agibot_gdk.Robot()
 
 # 初始化 MQTT
 mqtt_client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
@@ -41,7 +40,7 @@ mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
 mqtt_client.loop_start()
 
 # 创建控制器
-ctrl = EndEffectorController(robot, mqtt_client, TOPIC_EE_RESPONSE, TOPIC_DONE)
+ctrl = EndEffectorController(agibot_gdk, mqtt_client, TOPIC_EE_RESPONSE, TOPIC_DONE)
 
 # 测试爪子张开/闭合
 ctrl.left_gripper_action("open")

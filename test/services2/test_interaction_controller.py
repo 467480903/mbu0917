@@ -32,7 +32,6 @@ from interaction_controller import InteractionController
 
 # 初始化 GDK
 agibot_gdk.gdk_init()
-interaction = agibot_gdk.Interaction()
 
 # 初始化 MQTT
 mqtt_client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
@@ -40,7 +39,7 @@ mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
 mqtt_client.loop_start()
 
 # 创建控制器
-ctrl = InteractionController(interaction, mqtt_client, TOPIC_TTS_RESPONSE)
+ctrl = InteractionController(agibot_gdk, mqtt_client, TOPIC_TTS_RESPONSE)
 
 # 测试 TTS
 ctrl.speak("你好，这是一个测试")

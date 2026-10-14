@@ -22,13 +22,13 @@ except ImportError:
 class CameraController:
     """摄像头控制器"""
     
-    def __init__(self, camera, mqtt_client, topic_response, image_save_dir):
+    def __init__(self, agibot_gdk, mqtt_client, topic_response, image_save_dir):
         """构造函数
         
         Parameters
         ----------
-        camera : agibot_gdk.Camera
-            GDK Camera 对象
+        agibot_gdk : module
+            已初始化的 GDK 模块
         mqtt_client : mqtt.Client
             MQTT 客户端
         topic_response : str
@@ -36,7 +36,8 @@ class CameraController:
         image_save_dir : str
             图片保存目录
         """
-        self.camera = camera
+        self.agibot_gdk = agibot_gdk
+        self.camera = self.agibot_gdk.Camera()
         self.mqtt_client = mqtt_client
         self.topic_response = topic_response
         self.image_save_dir = image_save_dir
@@ -54,25 +55,23 @@ class CameraController:
             resp.update(extra)
         self.mqtt_client.publish(self.topic_response, json.dumps(resp, ensure_ascii=False))
     
-    def _get_camera_type(self, agibot_gdk, camera_name):
+    def _get_camera_type(self, camera_name):
         """获取相机类型枚举"""
         camera_map = {
-            "kHeadColor": agibot_gdk.CameraType.kHeadColor,
-            "kHeadDepth": agibot_gdk.CameraType.kHeadDepth,
-            "kHandLeftColor": agibot_gdk.CameraType.kHandLeftColor,
-            "kHandRightColor": agibot_gdk.CameraType.kHandRightColor,
+            "kHeadColor": self.agibot_gdk.CameraType.kHeadColor,
+            "kHeadDepth": self.agibot_gdk.CameraType.kHeadDepth,
+            "kHandLeftColor": self.agibot_gdk.CameraType.kHandLeftColor,
+            "kHandRightColor": self.agibot_gdk.CameraType.kHandRightColor,
         }
         return camera_map.get(camera_name)
     
     # ── 拍照（不嵌套，直接调用 GDK）────────────────────
     
-    def capture(self, agibot_gdk, camera_name):
+    def capture(self, camera_name):
         """拍照并保存
         
         Parameters
         ----------
-        agibot_gdk : module
-            GDK 模块
         camera_name : str
             相机名称，如 "kHeadColor"
         
@@ -81,7 +80,7 @@ class CameraController:
         str
             保存的文件名，失败返回 None
         """
-        camera_type = self._get_camera_type(agibot_gdk, camera_name)
+        camera_type = self._get_camera_type(camera_name)
         if camera_type is None:
             print(f"[摄像头] 未知相机: {camera_name}")
             return None
@@ -96,7 +95,7 @@ class CameraController:
             timestamp = time.strftime("%Y%m%d_%H%M%S")
             
             # 检查是否为 JPEG
-            if hasattr(image, "encoding") and image.encoding == agibot_gdk.Encoding.JPEG:
+            if hasattr(image, "encoding") and image.encoding == self.agibot_gdk.Encoding.JPEG:
                 filename = f"{camera_name}_{timestamp}.jpg"
                 filepath = os.path.join(self.image_save_dir, filename)
                 with open(filepath, "wb") as f:
@@ -115,7 +114,7 @@ class CameraController:
                 else:
                     pixels = np.frombuffer(raw, dtype=np.uint8)
                     color_format = getattr(image, "color_format", None)
-                    if color_format == agibot_gdk.ColorFormat.RGB:
+                    if color_format == self.agibot_gdk.ColorFormat.RGB:
                         bgr = cv2.cvtColor(
                             pixels.reshape((image.height, image.width, 3)),
                             cv2.COLOR_RGB2BGR)
@@ -140,18 +139,18 @@ class CameraController:
             print(f"[摄像头] 错误: {e}")
             return None
     
-    def capture_all(self, agibot_gdk):
+    def capture_all(self):
         """拍摄所有相机"""
         saved = []
         for camera_name in ["kHeadColor", "kHeadDepth", "kHandLeftColor", "kHandRightColor"]:
-            filename = self.capture(agibot_gdk, camera_name)
+            filename = self.capture(camera_name)
             if filename:
                 saved.append({"camera": camera_name, "file": filename})
         return saved
     
-    def get_image_base64(self, agibot_gdk, camera_name):
+    def get_image_base64(self, camera_name):
         """获取图像的 base64 编码"""
-        camera_type = self._get_camera_type(agibot_gdk, camera_name)
+        camera_type = self._get_camera_type(camera_name)
         if camera_type is None:
             return None
         
@@ -160,7 +159,7 @@ class CameraController:
             if image is None or image.data is None:
                 return None
             
-            if hasattr(image, "encoding") and image.encoding == agibot_gdk.Encoding.JPEG:
+            if hasattr(image, "encoding") and image.encoding == self.agibot_gdk.Encoding.JPEG:
                 return base64.b64encode(image.data).decode("ascii")
             
             if HAS_CV2:
@@ -173,7 +172,7 @@ class CameraController:
                 else:
                     pixels = np.frombuffer(raw, dtype=np.uint8)
                     color_format = getattr(image, "color_format", None)
-                    if color_format == agibot_gdk.ColorFormat.RGB:
+                    if color_format == self.agibot_gdk.ColorFormat.RGB:
                         bgr = cv2.cvtColor(
                             pixels.reshape((image.height, image.width, 3)),
                             cv2.COLOR_RGB2BGR)

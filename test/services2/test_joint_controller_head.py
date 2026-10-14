@@ -33,10 +33,9 @@ from joint_controller import JointController
 
 # 初始化 GDK
 agibot_gdk.gdk_init()
-robot = agibot_gdk.Robot()
 
 # 创建控制器
-ctrl = JointController(robot, mqtt_client, TOPIC_JOINT_RESPONSE, TOPIC_DONE)
+ctrl = JointController(agibot_gdk, mqtt_client, TOPIC_JOINT_RESPONSE, TOPIC_DONE)
 
 # 测试头部运动
 ctrl.move_head([0.0, 0.0, 0.0])

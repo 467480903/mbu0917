@@ -23,15 +23,13 @@ import sys
 class ChassisController:
     """底盘控制器"""
     
-    def __init__(self, pnc, slam, mqtt_client, topic_response, topic_done):
+    def __init__(self, agibot_gdk, mqtt_client, topic_response, topic_done):
         """构造函数
         
         Parameters
         ----------
-        pnc : agibot_gdk.Pnc
-            GDK Pnc 对象
-        slam : agibot_gdk.Slam
-            GDK Slam 对象
+        agibot_gdk : module
+            已初始化的 GDK 模块
         mqtt_client : mqtt.Client
             MQTT 客户端
         topic_response : str
@@ -39,8 +37,10 @@ class ChassisController:
         topic_done : str
             完成信号主题
         """
-        self.pnc = pnc
-        self.slam = slam
+        self.agibot_gdk = agibot_gdk
+        self.pnc = self.agibot_gdk.Pnc()
+        self.slam = self.agibot_gdk.Slam()
+        self.map = self.agibot_gdk.Map()
         self.mqtt_client = mqtt_client
         self.topic_response = topic_response
         self.topic_done = topic_done
@@ -86,18 +86,18 @@ class ChassisController:
         except Exception:
             pass
     
-    def _request_chassis(self, mode, agibot_gdk):
+    def _request_chassis(self, mode):
         """申请底盘控制权"""
         if self._chassis_mode != mode:
             self.pnc.request_chassis_control(mode)
             time.sleep(0.3)
             self._chassis_mode = mode
     
-    def _make_twist(self, agibot_gdk, vx=0.0, vy=0.0, wz=0.0):
+    def _make_twist(self, vx=0.0, vy=0.0, wz=0.0):
         """创建 Twist 消息"""
-        twist = agibot_gdk.Twist()
-        twist.linear = agibot_gdk.Vector3()
-        twist.angular = agibot_gdk.Vector3()
+        twist = self.agibot_gdk.Twist()
+        twist.linear = self.agibot_gdk.Vector3()
+        twist.angular = self.agibot_gdk.Vector3()
         twist.linear.x = vx
         twist.linear.y = vy
         twist.linear.z = 0.0
@@ -106,10 +106,10 @@ class ChassisController:
         twist.angular.z = wz
         return twist
     
-    def _stop_chassis(self, agibot_gdk):
+    def _stop_chassis(self):
         """停止底盘"""
         try:
-            twist = self._make_twist(agibot_gdk)
+            twist = self._make_twist()
             for _ in range(5):
                 self.pnc.move_chassis(twist)
                 time.sleep(0.05)
@@ -143,6 +143,43 @@ class ChassisController:
                 pose.orientation.z, pose.orientation.w
             )
         }
+
+    def get_map_points(self):
+        """读取当前地图中的全部引导点。
+
+        Returns
+        -------
+        list[dict]
+            按点位名称排序的列表。每项包含 map_id、name、source、
+            position、orientation 和 type。
+        """
+        time.sleep(1.0)
+        current_map = self.map.get_curr_map()
+        map_info = self.map.get_map(current_map.id)
+        points = []
+
+        for point in map_info.guide_pts:
+            points.append({
+                "map_id": current_map.id,
+                "name": str(point.id),
+                "source": "map",
+                "position": [
+                    point.pt.position.x,
+                    point.pt.position.y,
+                    point.pt.position.z,
+                ],
+                "orientation": [
+                    point.pt.orientation.x,
+                    point.pt.orientation.y,
+                    point.pt.orientation.z,
+                    point.pt.orientation.w,
+                ],
+                "type": point.type,
+            })
+
+        points.sort(key=lambda item: item["name"])
+        print(f"[底盘] 当前地图 id={current_map.id}，读取到 {len(points)} 个点位")
+        return points
     
     @staticmethod
     def _quat_to_yaw(x, y, z, w):
@@ -214,13 +251,12 @@ class ChassisController:
     
     # ── 运动命令（不嵌套，直接调用 GDK）────────────────────
     
-    def relative_move(self, agibot_gdk, x_mm, y_mm, rotate_deg, timeout=60.0):
+    # X + , 前进, Y + , 靠左， rot + 逆时针
+    def relative_move(self, x_mm, y_mm, rotate_deg, timeout=60.0):
         """相对运动（基于 GDK relative_move）
         
         Parameters
         ----------
-        agibot_gdk : module
-            GDK 模块
         x_mm : float
             x 方向位移（毫米）
         y_mm : float
@@ -250,7 +286,7 @@ class ChassisController:
         qw = math.cos(half)
         
         # 构建请求
-        req = agibot_gdk.NaviReq()
+        req = self.agibot_gdk.NaviReq()
         req.target.position.x = dx
         req.target.position.y = dy
         req.target.position.z = 0.0
@@ -269,13 +305,11 @@ class ChassisController:
         
         return self._wait_navi_done(timeout)
     
-    def point_move(self, agibot_gdk, point, timeout=120.0):
+    def point_move2(self, point):
         """到点运动
         
         Parameters
         ----------
-        agibot_gdk : module
-            GDK 模块
         point : dict
             地图点位 {position: [x,y,z], orientation: [x,y,z,w], name: str}
         timeout : float
@@ -288,7 +322,7 @@ class ChassisController:
         print(f"[底盘] 到点运动: {name} ({pos[0]:.3f}, {pos[1]:.3f})")
         
         # 构建导航请求
-        req = agibot_gdk.NaviReq()
+        req = self.agibot_gdk.NaviReq()
         req.target.position.x = pos[0]
         req.target.position.y = pos[1]
         req.target.position.z = pos[2] if len(pos) > 2 else 0.0
@@ -304,19 +338,23 @@ class ChassisController:
         
         try:
             self.pnc.normal_navi(req)
+            return True
         except Exception as e:
             print(f"[底盘] 发送失败: {e}")
             return False
         
-        return self._wait_navi_done(timeout)
+
+    def point_move(self, point, timeout=120.0):
+        
+        self.point_move2(self,point)
+        
+        return self._wait_navi_done(timeout)        
     
-    def points_move(self, agibot_gdk, points, vel_line=0.25, vel_rotate_deg=10.0, timeout=120.0):
+    def points_move(self, points, vel_line=0.25, vel_rotate_deg=10.0, timeout=120.0):
         """多点运动
         
         Parameters
         ----------
-        agibot_gdk : module
-            GDK 模块
         points : list
             地图点位列表，每个元素为 {position, orientation, name}
         vel_line : float
@@ -332,7 +370,7 @@ class ChassisController:
             name = point.get("name", "")
             # 最后一个点用 normal_navi（高精度）
             if i == len(points) - 1:
-                ok = self.point_move(agibot_gdk, point, timeout)
+                ok = self.point_move(point, timeout)
             else:
                 # 计算到下一个点的相对位置
                 current = self._get_current_pose()
@@ -341,7 +379,7 @@ class ChassisController:
                 target_yaw = self._quat_to_yaw(*point["orientation"])
                 d_yaw = math.degrees(self._normalize_angle(target_yaw - current["yaw"]))
                 
-                ok = self.relative2_move(agibot_gdk, dx, dy, d_yaw, vel_line, vel_rotate_deg, timeout=timeout)
+                ok = self.relative2_move(dx, dy, d_yaw, vel_line, vel_rotate_deg, timeout=timeout)
             
             if not ok:
                 print(f"[底盘] 在 {name} 失败")
@@ -352,15 +390,15 @@ class ChassisController:
         print("[底盘] 多点运动完成")
         return True
     
-    def stop(self, agibot_gdk):
+    def stop(self):
         """停止底盘运动"""
         print("[底盘] 停止")
         self._cancel_navi()
-        self._stop_chassis(agibot_gdk)
+        self._stop_chassis()
         self._wait_stop()
         return True
     
-    def relative2_move(self, agibot_gdk, x_mm, y_mm, rotate_deg, vel_line=0.25, vel_rotate_deg=10.0, timeout=60.0):
+    def relative2_move(self, x_mm, y_mm, rotate_deg, vel_line=0.25, vel_rotate_deg=10.0, timeout=60.0):
         """相对运动2（带速度参数，使用 move_chassis）
         
         实现要点：
@@ -371,8 +409,6 @@ class ChassisController:
         
         Parameters
         ----------
-        agibot_gdk : module
-            GDK 模块
         x_mm : float
             x 方向位移（毫米）
         y_mm : float
@@ -409,18 +445,18 @@ class ChassisController:
                 
                 if abs(yaw_diff) > 0.02:  # > 1度
                     print(f"[底盘] 转向目标方向: {math.degrees(yaw_diff):.1f}°")
-                    self._rotate_to(agibot_gdk, current["yaw"] + yaw_diff, wz, timeout - (time.time() - start_time))
+                    self._rotate_to(current["yaw"] + yaw_diff, wz, timeout - (time.time() - start_time))
             
             # 第二步：直线运动（分12段）
             if abs(dx) > 0.001 or abs(dy) > 0.001:
                 distance = math.hypot(dx, dy)
                 print(f"[底盘] 直线运动: {distance:.3f}m")
-                self._move_line(agibot_gdk, dx, dy, vel_line, timeout - (time.time() - start_time))
+                self._move_line(dx, dy, vel_line, timeout - (time.time() - start_time))
             
             # 第三步：最终旋转
             if abs(final_yaw) > 0.001:
                 print(f"[底盘] 最终旋转: {rotate_deg:.1f}°")
-                self._rotate_to(agibot_gdk, current["yaw"] + final_yaw, wz, timeout - (time.time() - start_time))
+                self._rotate_to(current["yaw"] + final_yaw, wz, timeout - (time.time() - start_time))
             
             return True
         
@@ -429,12 +465,12 @@ class ChassisController:
             return False
         
         finally:
-            self._stop_chassis(agibot_gdk)
+            self._stop_chassis()
             self._wait_stop()
     
-    def _rotate_to(self, agibot_gdk, target_yaw, wz, timeout):
+    def _rotate_to(self, target_yaw, wz, timeout):
         """旋转到目标角度"""
-        self._request_chassis(0, agibot_gdk)  # Ackermann 模式
+        self._request_chassis(0)  # Ackermann 模式
         deadline = time.time() + timeout
         
         while time.time() < deadline:
@@ -445,13 +481,13 @@ class ChassisController:
                 break
             
             actual_wz = max(-abs(wz), min(abs(wz), yaw_diff))
-            twist = self._make_twist(agibot_gdk, wz=actual_wz)
+            twist = self._make_twist(wz=actual_wz)
             self.pnc.move_chassis(twist)
             time.sleep(self.ctrl_dt)
     
-    def _move_line(self, agibot_gdk, dx, dy, max_speed, timeout):
+    def _move_line(self, dx, dy, max_speed, timeout):
         """直线运动（蟹行，分12段）"""
-        self._request_chassis(1, agibot_gdk)  # 蟹行模式
+        self._request_chassis(1)  # 蟹行模式
         deadline = time.time() + timeout
         
         distance = math.hypot(dx, dy)
@@ -490,7 +526,7 @@ class ChassisController:
             vx = dir_x * speed
             vy = dir_y * speed
             
-            twist = self._make_twist(agibot_gdk, vx=vx, vy=vy)
+            twist = self._make_twist(vx=vx, vy=vy)
             
             seg_start = time.time()
             while time.time() - seg_start < duration and time.time() < deadline:

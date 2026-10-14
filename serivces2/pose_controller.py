@@ -16,13 +16,13 @@ import threading
 class PoseController:
     """位姿控制器"""
     
-    def __init__(self, robot, mqtt_client, topic_response, topic_done):
+    def __init__(self, agibot_gdk, mqtt_client, topic_response, topic_done):
         """构造函数
         
         Parameters
         ----------
-        robot : agibot_gdk.Robot
-            GDK Robot 对象
+        agibot_gdk : module
+            已初始化的 GDK 模块
         mqtt_client : mqtt.Client
             MQTT 客户端
         topic_response : str
@@ -30,7 +30,8 @@ class PoseController:
         topic_done : str
             完成信号主题
         """
-        self.robot = robot
+        self.agibot_gdk = agibot_gdk
+        self.robot = self.agibot_gdk.Robot()
         self.mqtt_client = mqtt_client
         self.topic_response = topic_response
         self.topic_done = topic_done
@@ -157,16 +158,16 @@ class PoseController:
     
     # ── 运动执行（不嵌套，直接调用 GDK）────────────────────
     
-    def _send_trajectory(self, agibot_gdk, traj, group):
+    def _send_trajectory(self, traj, group):
         """发送单臂轨迹"""
         dt = 1.0 / self.rate_hz
         
         for wp in traj:
-            ep = agibot_gdk.EndEffectorPose()
+            ep = self.agibot_gdk.EndEffectorPose()
             ep.life_time = self.lifetime
             ep.group = group
             
-            if group == agibot_gdk.EndEffectorControlGroup.kLeftArm:
+            if group == self.agibot_gdk.EndEffectorControlGroup.kLeftArm:
                 p = ep.left_end_effector_pose
             else:
                 p = ep.right_end_effector_pose
@@ -191,7 +192,7 @@ class PoseController:
         
         return True
     
-    def _send_dual_trajectory(self, agibot_gdk, traj_left, traj_right):
+    def _send_dual_trajectory(self, traj_left, traj_right):
         """同时发送双臂轨迹"""
         dt = 1.0 / self.rate_hz
         
@@ -200,9 +201,9 @@ class PoseController:
             wp_r = traj_right[i]
             
             # 左臂
-            ep_l = agibot_gdk.EndEffectorPose()
+            ep_l = self.agibot_gdk.EndEffectorPose()
             ep_l.life_time = self.lifetime
-            ep_l.group = agibot_gdk.EndEffectorControlGroup.kLeftArm
+            ep_l.group = self.agibot_gdk.EndEffectorControlGroup.kLeftArm
             ep_l.left_end_effector_pose.position.x = wp_l["position"][0]
             ep_l.left_end_effector_pose.position.y = wp_l["position"][1]
             ep_l.left_end_effector_pose.position.z = wp_l["position"][2]
@@ -212,9 +213,9 @@ class PoseController:
             ep_l.left_end_effector_pose.orientation.w = wp_l["orientation"][3]
             
             # 右臂
-            ep_r = agibot_gdk.EndEffectorPose()
+            ep_r = self.agibot_gdk.EndEffectorPose()
             ep_r.life_time = self.lifetime
-            ep_r.group = agibot_gdk.EndEffectorControlGroup.kRightArm
+            ep_r.group = self.agibot_gdk.EndEffectorControlGroup.kRightArm
             ep_r.right_end_effector_pose.position.x = wp_r["position"][0]
             ep_r.right_end_effector_pose.position.y = wp_r["position"][1]
             ep_r.right_end_effector_pose.position.z = wp_r["position"][2]
@@ -235,19 +236,19 @@ class PoseController:
         
         return True
     
-    def _hold_at_pose(self, agibot_gdk, pose_l, pose_r, hold_sec=1.0):
+    def _hold_at_pose(self, pose_l, pose_r, hold_sec=1.0):
         """在指定位姿保持"""
         n = int(hold_sec * self.rate_hz)
         hold_life = 0.1
         
         for _ in range(n):
-            for pose, group in [(pose_l, agibot_gdk.EndEffectorControlGroup.kLeftArm),
-                                (pose_r, agibot_gdk.EndEffectorControlGroup.kRightArm)]:
-                ep = agibot_gdk.EndEffectorPose()
+            for pose, group in [(pose_l, self.agibot_gdk.EndEffectorControlGroup.kLeftArm),
+                                (pose_r, self.agibot_gdk.EndEffectorControlGroup.kRightArm)]:
+                ep = self.agibot_gdk.EndEffectorPose()
                 ep.life_time = hold_life
                 ep.group = group
                 
-                if group == agibot_gdk.EndEffectorControlGroup.kLeftArm:
+                if group == self.agibot_gdk.EndEffectorControlGroup.kLeftArm:
                     p = ep.left_end_effector_pose
                 else:
                     p = ep.right_end_effector_pose
@@ -267,7 +268,7 @@ class PoseController:
                 time.sleep(0.002)
             time.sleep(max(0.0, 1.0 / self.rate_hz - 0.004))
     
-    def move_left_arm(self, agibot_gdk, position, orientation):
+    def move_left_arm(self, position, orientation):
         """控制左臂到绝对位姿"""
         with self._lock:
             print(f"[位姿] 左臂: {position}")
@@ -279,16 +280,16 @@ class PoseController:
                                     start["orientation"], target["orientation"])
             
             traj = self._plan(start, target, n_steps)
-            success = self._send_trajectory(agibot_gdk, traj, agibot_gdk.EndEffectorControlGroup.kLeftArm)
+            success = self._send_trajectory(traj, self.agibot_gdk.EndEffectorControlGroup.kLeftArm)
             
             if success:
                 for _ in range(int(1.0 * self.rate_hz)):
-                    self._send_trajectory(agibot_gdk, [target], agibot_gdk.EndEffectorControlGroup.kLeftArm)
+                    self._send_trajectory([target], self.agibot_gdk.EndEffectorControlGroup.kLeftArm)
             
             print(f"[位姿] 左臂 {'完成' if success else '失败'}")
             return success
     
-    def move_right_arm(self, agibot_gdk, position, orientation):
+    def move_right_arm(self, position, orientation):
         """控制右臂到绝对位姿"""
         with self._lock:
             print(f"[位姿] 右臂: {position}")
@@ -300,16 +301,16 @@ class PoseController:
                                     start["orientation"], target["orientation"])
             
             traj = self._plan(start, target, n_steps)
-            success = self._send_trajectory(agibot_gdk, traj, agibot_gdk.EndEffectorControlGroup.kRightArm)
+            success = self._send_trajectory(traj, self.agibot_gdk.EndEffectorControlGroup.kRightArm)
             
             if success:
                 for _ in range(int(1.0 * self.rate_hz)):
-                    self._send_trajectory(agibot_gdk, [target], agibot_gdk.EndEffectorControlGroup.kRightArm)
+                    self._send_trajectory([target], self.agibot_gdk.EndEffectorControlGroup.kRightArm)
             
             print(f"[位姿] 右臂 {'完成' if success else '失败'}")
             return success
     
-    def move_both_arms(self, agibot_gdk, left_target, right_target):
+    def move_both_arms(self, left_target, right_target):
         """控制双臂到绝对位姿"""
         with self._lock:
             print(f"[位姿] 双臂")
@@ -326,15 +327,15 @@ class PoseController:
             traj_l = self._plan(start_l, left_target, n_steps)
             traj_r = self._plan(start_r, right_target, n_steps)
             
-            success = self._send_dual_trajectory(agibot_gdk, traj_l, traj_r)
+            success = self._send_dual_trajectory(traj_l, traj_r)
             
             if success:
-                self._hold_at_pose(agibot_gdk, traj_l[-1], traj_r[-1], hold_sec=1.0)
+                self._hold_at_pose(traj_l[-1], traj_r[-1], hold_sec=1.0)
             
             print(f"[位姿] 双臂 {'完成' if success else '失败'}")
             return success
     
-    def move_relative(self, agibot_gdk, side, offset, rotation):
+    def move_relative(self, side, offset, rotation):
         """相对运动"""
         with self._lock:
             name = self.left_name if side == "left" else self.right_name
@@ -356,14 +357,14 @@ class PoseController:
                                     start["orientation"], target["orientation"])
             
             traj = self._plan(start, target, n_steps)
-            group = (agibot_gdk.EndEffectorControlGroup.kLeftArm if side == "left"
-                     else agibot_gdk.EndEffectorControlGroup.kRightArm)
-            success = self._send_trajectory(agibot_gdk, traj, group)
+            group = (self.agibot_gdk.EndEffectorControlGroup.kLeftArm if side == "left"
+                     else self.agibot_gdk.EndEffectorControlGroup.kRightArm)
+            success = self._send_trajectory(traj, group)
             
             print(f"[位姿] {side}臂 {'完成' if success else '失败'}")
             return success
     
-    def move_waist(self, agibot_gdk, offset):
+    def move_waist(self, offset):
         """腰部运动（上下前后）"""
         with self._lock:
             print(f"[位姿] 腰部: offset={offset}")
@@ -388,7 +389,7 @@ class PoseController:
                 "orientation": start_r["orientation"]
             }
             
-            return self.move_both_arms(agibot_gdk, target_l, target_r)
+            return self.move_both_arms(target_l, target_r)
     
     @staticmethod
     def _recover_quat(data):

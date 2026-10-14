@@ -33,8 +33,6 @@ from chassis_controller import ChassisController
 
 # 初始化 GDK
 agibot_gdk.gdk_init()
-pnc = agibot_gdk.Pnc()
-slam = agibot_gdk.Slam()
 
 # 初始化 MQTT
 mqtt_client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
@@ -42,10 +40,10 @@ mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
 mqtt_client.loop_start()
 
 # 创建控制器
-ctrl = ChassisController(pnc, slam, mqtt_client, TOPIC_BASE_RESPONSE, TOPIC_DONE)
+ctrl = ChassisController(agibot_gdk, mqtt_client, TOPIC_BASE_RESPONSE, TOPIC_DONE)
 
 # 测试停止
-ctrl.stop(agibot_gdk)
+ctrl.stop()
 
 mqtt_client.loop_stop()
 mqtt_client.disconnect()

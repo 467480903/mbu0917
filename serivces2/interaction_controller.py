@@ -11,19 +11,20 @@ interaction_controller.py — 交互控制器
 class InteractionController:
     """交互控制器"""
     
-    def __init__(self, interaction, mqtt_client, topic_response):
+    def __init__(self, agibot_gdk, mqtt_client, topic_response):
         """构造函数
         
         Parameters
         ----------
-        interaction : agibot_gdk.Interaction
-            GDK Interaction 对象
+        agibot_gdk : module
+            已初始化的 GDK 模块
         mqtt_client : mqtt.Client
             MQTT 客户端
         topic_response : str
             反馈主题
         """
-        self.interaction = interaction
+        self.agibot_gdk = agibot_gdk
+        self.interaction = agibot_gdk.Interaction()
         self.mqtt_client = mqtt_client
         self.topic_response = topic_response
         self._volume = 80

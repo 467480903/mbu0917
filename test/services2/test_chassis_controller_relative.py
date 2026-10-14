@@ -11,6 +11,7 @@ test_chassis_controller_relative.py - 底盘控制器相对运动测试
 import sys
 import os
 import json
+import time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../serivces2'))
 
 # 加载配置
@@ -33,19 +34,19 @@ from chassis_controller import ChassisController
 
 # 初始化 GDK
 agibot_gdk.gdk_init()
-pnc = agibot_gdk.Pnc()
-slam = agibot_gdk.Slam()
 
 # 初始化 MQTT
 mqtt_client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
 mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
 mqtt_client.loop_start()
 
+time.sleep(2)
+
 # 创建控制器
-ctrl = ChassisController(pnc, slam, mqtt_client, TOPIC_BASE_RESPONSE, TOPIC_DONE)
+ctrl = ChassisController(agibot_gdk, mqtt_client, TOPIC_BASE_RESPONSE, TOPIC_DONE)
 
 # 测试相对运动：前进 100mm
-ctrl.relative_move(agibot_gdk, 100, 0, 0)
+ctrl.relative_move(-100, 0, 0)
 
 mqtt_client.loop_stop()
 mqtt_client.disconnect()

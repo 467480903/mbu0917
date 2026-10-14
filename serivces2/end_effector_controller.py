@@ -13,13 +13,13 @@ import time
 class EndEffectorController:
     """末端执行器控制器"""
     
-    def __init__(self, robot, mqtt_client, topic_response, topic_done):
+    def __init__(self, agibot_gdk, mqtt_client, topic_response, topic_done):
         """构造函数
         
         Parameters
         ----------
-        robot : agibot_gdk.Robot
-            GDK Robot 对象
+        agibot_gdk : module
+            已初始化的 GDK 模块
         mqtt_client : mqtt.Client
             MQTT 客户端
         topic_response : str
@@ -27,7 +27,8 @@ class EndEffectorController:
         topic_done : str
             完成信号主题
         """
-        self.robot = robot
+        self.agibot_gdk = agibot_gdk
+        self.robot = agibot_gdk.Robot()
         self.mqtt_client = mqtt_client
         self.topic_response = topic_response
         self.topic_done = topic_done

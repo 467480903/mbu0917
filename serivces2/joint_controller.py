@@ -17,13 +17,13 @@ import math
 class JointController:
     """关节控制器"""
     
-    def __init__(self, robot, mqtt_client, topic_response, topic_done):
+    def __init__(self, agibot_gdk, mqtt_client, topic_response, topic_done):
         """构造函数
         
         Parameters
         ----------
-        robot : agibot_gdk.Robot
-            GDK Robot 对象
+        agibot_gdk : module
+            已初始化的 GDK 模块
         mqtt_client : mqtt.Client
             MQTT 客户端
         topic_response : str
@@ -31,7 +31,8 @@ class JointController:
         topic_done : str
             完成信号主题
         """
-        self.robot = robot
+        self.agibot_gdk = agibot_gdk
+        self.robot = self.agibot_gdk.Robot()
         self.mqtt_client = mqtt_client
         self.topic_response = topic_response
         self.topic_done = topic_done
@@ -193,13 +194,11 @@ class JointController:
         self.robot.move_arm_joint(positions, vel, 2)
         return True
     
-    def move_wbc(self, agibot_gdk, joints_dict, speed=None):
+    def move_wbc(self, joints_dict, speed=None):
         """控制全身22个关节（批量请求）
         
         Parameters
         ----------
-        agibot_gdk : module
-            GDK 模块
         joints_dict : dict
             关节名 -> 角度（弧度）的字典，必须包含全部22个关节
         speed : float
@@ -223,7 +222,7 @@ class JointController:
             )
         
         # 构建批量请求
-        request = agibot_gdk.JointControlReq()
+        request = self.agibot_gdk.JointControlReq()
         request.life_time = 0.1
         request.joint_names = self.whole_body_joint_keys
         request.joint_positions = positions

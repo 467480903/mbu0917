@@ -33,7 +33,6 @@ from joint_controller import JointController
 
 # 初始化 GDK
 agibot_gdk.gdk_init()
-robot = agibot_gdk.Robot()
 
 # 初始化 MQTT
 mqtt_client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
@@ -41,7 +40,7 @@ mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
 mqtt_client.loop_start()
 
 # 创建控制器
-ctrl = JointController(robot, mqtt_client, TOPIC_JOINT_RESPONSE, TOPIC_DONE)
+ctrl = JointController(agibot_gdk, mqtt_client, TOPIC_JOINT_RESPONSE, TOPIC_DONE)
 
 # 测试左臂运动
 ctrl.move_left_arm([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])

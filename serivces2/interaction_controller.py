@@ -7,6 +7,8 @@ interaction_controller.py — 交互控制器
   - 控制TTS输出
 """
 
+import threading
+
 
 class InteractionController:
     """交互控制器"""
@@ -28,6 +30,7 @@ class InteractionController:
         self.mqtt_client = mqtt_client
         self.topic_response = topic_response
         self._volume = 80
+        self._lock = threading.Lock()
     
     def _publish_response(self, cmd, ts, success=False, extra=None):
         """发布反馈报文"""
@@ -52,7 +55,8 @@ class InteractionController:
         print(f"[TTS] {text}")
         
         try:
-            self.interaction.tts_speak(text)
+            with self._lock:
+                self.interaction.play_tts(text)
             return True
         except Exception as e:
             print(f"[TTS] 错误: {e}")
@@ -67,8 +71,14 @@ class InteractionController:
             音量 0~100
         """
         self._volume = max(0, min(100, int(volume)))
-        print(f"[TTS] 音量: {self._volume}")
-        return True
+        try:
+            with self._lock:
+                self.interaction.set_volume(self._volume)
+            print(f"[TTS] 音量: {self._volume}")
+            return True
+        except Exception as e:
+            print(f"[TTS] 设置音量错误: {e}")
+            return False
     
     def get_volume(self):
         """获取当前音量"""

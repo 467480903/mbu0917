@@ -7,6 +7,8 @@ end_effector_controller.py — 末端控制器
   - 控制末端爪子的张合
 """
 
+import json
+import threading
 import time
 
 
@@ -32,6 +34,9 @@ class EndEffectorController:
         self.mqtt_client = mqtt_client
         self.topic_response = topic_response
         self.topic_done = topic_done
+        self.status_topic = "/humanoid/status/data"
+        self._status_stop = threading.Event()
+        self._status_thread = None
         
         # 爪子参数
         self.gripper_open = 1.0
@@ -72,6 +77,47 @@ class EndEffectorController:
         except Exception as error:
             print(f"[末端] 读取 {side} 夹爪位置失败: {error}")
         return None
+
+    def get_gripper_status(self):
+        """读取左右夹爪 GDK 位置及归一化开合值。"""
+        result = {}
+        for side in ("left", "right"):
+            position = self._read_gripper_position(side)
+            opening = None
+            if position is not None and self.gripper_open_position != 0:
+                opening = max(0.0, min(1.0, position / self.gripper_open_position))
+            result[side] = {"position": position, "opening": opening}
+        return result
+
+    def publish_status(self):
+        payload = {
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "grippers": self.get_gripper_status(),
+        }
+        self.mqtt_client.publish(
+            self.status_topic, json.dumps(payload, ensure_ascii=False), qos=0)
+        return payload
+
+    def _status_loop(self, interval):
+        while not self._status_stop.is_set():
+            try:
+                self.publish_status()
+            except Exception as error:
+                print(f"[夹爪状态] 发布失败: {error}")
+            self._status_stop.wait(interval)
+
+    def start_status_publishing(self, interval=0.2):
+        if self._status_thread and self._status_thread.is_alive():
+            return
+        self._status_stop.clear()
+        self._status_thread = threading.Thread(
+            target=self._status_loop, args=(interval,), daemon=True,
+            name="gripper-status")
+        self._status_thread.start()
+        print(f"[夹爪状态] 发布线程已启动，频率={1.0 / interval:.1f}Hz")
+
+    def stop_status_publishing(self):
+        self._status_stop.set()
 
     def _send_gripper_position(self, side, position):
         """使用 GDK move_ee_pos 下发单侧夹爪位置。"""

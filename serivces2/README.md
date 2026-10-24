@@ -3,6 +3,49 @@
 基于 `agents.md` 规格文档，对 `services/` 目录代码的重构版本。
 目标机器人为**智元 G2 人形机器人**，通过 **MQTT 报文**进行交互：Python 侧使用 G2 GDK 激活设备驱动层，收到 MQTT 请求报文后执行设备动作，动作完成后再回传反馈/完成报文。
 
+## 旧 web 状态兼容
+
+`serivces2` 不创建单独的集中式 `status.py`。状态读取和发布由拥有相应
+GDK 对象的控制器负责，并兼容旧 `web/` 使用的主题：
+
+- `JointController`：5 Hz 发布 `/humanoid/status/data` 的 `joints` 片段。
+- `PoseController`：5 Hz 发布 `left_ee`、`right_ee` 片段。
+- `ChassisController`：5 Hz 发布 `chassis`，按需向
+  `/humanoid/status/cloud` 发布前后激光点云。
+- `EndEffectorController`：5 Hz 发布 `grippers` 片段。
+- `CameraController`：3 Hz 更新四路相机内存缓存；旧网页发出 `start` 后，
+  才向 `/humanoid/camera/data` 发布画面。
+
+旧 `web/js/index.js` 合并这些状态片段，因此关节、末端和底盘状态不会互相覆盖。
+`web/` 是正式网页入口；`web2/` 不再作为主界面。
+
+`main.py` 还提供旧网页兼容主题：
+
+- 关节/位姿数据：`/humanoid/joints/save` → `/humanoid/joints/data`
+- 坐标点位：`/humanoid/positions/control` → `/humanoid/positions/data`
+- 地图与地图点位：`/humanoid/map/control`、`/humanoid/map/db_control`
+- Modbus/S7：`/humanoid/modbus/control` → `/humanoid/modbus/data`
+- 相机、关节、底盘、夹爪、TTS 保持旧 web 的原主题协议。
+
+程序列表、执行和单步调试由 `runtime2/run.py` 独立服务提供，
+不在 `serivces2/main.py` 中复制调试器。
+
+### 启动旧 web 整套服务
+
+```bash
+cd /data/wxf/mbu0917
+source /home/agi/app/gdk/scripts/env.sh /home/agi/app
+python3 serivces2/main.py
+
+# 另一终端：程序调试服务
+python3 runtime2/run.py
+
+# 另一终端：旧 web 静态页面
+python3 -m http.server 8004 -d web
+```
+
+访问 `http://<机器人IP>:8004/index.html`。
+
 ## 目录文件清单
 
 | 文件 | 类型 | 说明 |
@@ -10,12 +53,12 @@
 | `agents.md` | 文档 | 重构规格说明书（目标、交互方式、测试要求、代码风格、功能划分） |
 | `config.json` | 配置 | MQTT broker 地址、各模块 topic、数据/图片/识别输出路径 |
 | `database_controller.py` | 控制器 | SQLite 数据库读写（关节角、位姿、地图点位） |
-| `chassis_controller.py` | 控制器 | 底盘运动（相对/到点/多点/停止/带速度相对运动） |
+| `chassis_controller.py` | 控制器 | 底盘运动，以及当前地图、激光点云、地图点位、地图坐标、电池状态读取 |
 | `joint_controller.py` | 控制器 | 全身关节控制（头/腰/左右臂/全身） |
 | `pose_controller.py` | 控制器 | 左右手末端位姿控制（含腰部上下前后） |
 | `end_effector_controller.py` | 控制器 | 末端爪子张合 |
 | `interaction_controller.py` | 控制器 | TTS 语音输出 |
-| `camera_controller.py` | 控制器 | 头部彩色/深度、左右手腕相机拍照与图像流 |
+| `camera_controller.py` | 控制器 | 头部彩色/深度、左右手腕相机单帧读取与双文件拍照保存 |
 | `apriltag_controller.py` | 控制器 | Apriltag 图片识别解析 |
 | `README.md` | 文档 | 本说明 |
 
@@ -41,15 +84,21 @@
 
 ### 2. 底盘控制器 `chassis_controller.py`
 
-- 构造函数：`ChassisController(pnc, slam, mqtt_client, topic_response, topic_done)`（不引用数据库控制器）
+- 构造函数：`ChassisController(agibot_gdk, mqtt_client, topic_response, topic_done)`（不引用数据库控制器，内部创建 Pnc/Slam/Map/Lidar/Robot）
 - 既支持**蟹行斜走**，也支持 **Ackermann 方式转弯**，以及前后直行。
 - 单位约定：x/y 为毫米，rotate 为角度，vel_line 为米/秒，vel_rotate 为度/秒。
 - 主要方法：
-  - `relative_move(agibot_gdk, x_mm, y_mm, rotate_deg, timeout)` — 基于 GDK `relative_move`，内部 `while` 判断到位。
-  - `point_move(agibot_gdk, point, timeout)` — 接收点位字典 `{position, orientation, name}`，使用 GDK `normal_navi`（支持到点重定位），非阻塞下发后循环判断到达。
-  - `points_move(agibot_gdk, points, vel_line, vel_rotate_deg, timeout)` — points 为点位字典列表，多点依次导航；**最后一个点用 `normal_navi` 走精度，其余点用 `relative2_move` 走**。
+  - `relative_move(x_mm, y_mm, rotate_deg, timeout)` — 基于 GDK `relative_move`，内部 `while` 判断到位。
+  - `point_move(point, timeout)` — 接收点位字典 `{position, orientation, name}`，使用 GDK `normal_navi`（支持到点重定位），非阻塞下发后循环判断到达。
+  - `points_move(points, vel_line, vel_rotate_deg, timeout)` — points 为点位字典列表，多点依次导航；**最后一个点用 `normal_navi` 走精度，其余点用 `relative2_move` 走**。
   - `relative2_move(...)` — 带速度参数的相对运动：先转角（`vel_rotate`）→ 蟹行直线（分 12 段：前 4 段加速、中 4 段匀速、后 4 段减速，队列式执行）→ 到位后最终转角。
-  - `stop(agibot_gdk)` — 立即停止底盘。
+  - `stop()` — 立即停止底盘。
+  - `get_map_data()` — 读取当前地图 `OccupancyGrid`，返回宽高、分辨率、原点和 gzip+base64 栅格数据，网页解压后绘制。
+  - `get_laser_points()` — 读取前后激光雷达真实点云，过滤 30 米外点并按 4 倍降采样。
+  - `get_current_map_pose()` — 通过 `slam.get_curr_pose()` 读取底盘地图坐标与朝向，同时返回定位状态和置信度。
+  - `get_map_points()` — 读取当前地图内部保存的全部引导点。
+  - `get_battery()` — 读取两组底盘电池的 SOC/SOH、电压、电流和温度。
+  - `get_map_snapshot()` — 一次返回网页显示需要的全部真实地图数据。
 - 内部辅助：`_task_state`、`_cancel_navi`、`_request_chassis`、`_make_twist`、`_stop_chassis`、`_wait_stop`、`_wait_navi_done`、`_rotate_to`、`_move_line`、`_get_current_pose` 等。
 
 ### 3. 关节控制器 `joint_controller.py`
@@ -96,12 +145,12 @@
 ### 7. 摄像头控制器 `camera_controller.py`
 
 - 构造函数：`CameraController(camera, mqtt_client, topic_response, image_save_dir)`
-- 控制头部彩色相机、头部深度相机、左右手腕相机的**视频流输出和拍照保存**。
+- 控制头部彩色相机、头部深度相机、左右手腕相机的单帧读取和拍照保存。
 - 支持相机：`kHeadColor`、`kHeadDepth`、`kHandLeftColor`、`kHandRightColor`。
 - 主要方法：
-  - `capture(agibot_gdk, camera_name)` — 拍照保存（JPEG/OpenCV 编码/原始数据三种兜底）
-  - `capture_all(agibot_gdk)` — 拍摄全部相机
-  - `get_image_base64(agibot_gdk, camera_name)` — 返回图像 base64
+  - `capture(camera_name)` — 拍照并同时保存 `{相机}-{时间戳}.jpg` 和 `{相机}-latest.jpg`
+  - `capture_all()` — 拍摄全部相机
+  - `get_image_base64(camera_name)` — 返回可供网页显示的 JPEG Base64
 
 ### 8. Apriltag 图片解析控制器 `apriltag_controller.py`
 
@@ -126,6 +175,7 @@
     "camera":   { "request": "/humanoid/camera/request/",   "response": "/humanoid/camera/response/" },
     "apriltag": { "request": "/humanoid/apriltag/request/", "response": "/humanoid/apriltag/response/" },
     "db":       { "request": "/humanoid/db/request/",       "response": "/humanoid/db/response/" },
+    "maptest":  { "request": "/humanoid/maptest/request/",  "response": "/humanoid/maptest/response/" },
     "done": "/humanoid/done/"
   },
   "paths": { "datas": "datas", "images": "images", "detect": "detect" }
@@ -149,11 +199,19 @@
 | `test_database_controller.py` | 数据库 | 是（系统 Python） |
 | `test_chassis_controller_relative.py` | 底盘相对运动 | 否（需人工确认） |
 | `test_chassis_controller_stop.py` | 底盘停止 | 否（需人工确认） |
+| `test_chassis_controller_map_data.py` | 当前真实栅格地图读取 | 是（需 GDK 环境） |
+| `test_chassis_controller_laser.py` | 前后真实激光点云读取 | 是（需 GDK 环境） |
+| `test_chassis_controller_map_pose.py` | 底盘当前地图坐标读取 | 是（需 GDK 环境） |
+| `test_chassis_controller_battery.py` | 底盘电池状态读取 | 是（需 GDK 环境） |
+| `maptest.html` / `maptest.js` | 真实 MQTT 地图综合测试页面 | 是（运动按钮人工操作） |
+| `test_maptest_web.sh` | Playwright 真实数据读取测试 | 是（不自动执行运动） |
 | `test_joint_controller_head.py` | 头部关节 | 否（需人工确认） |
 | `test_joint_controller_waist.py` | 腰部关节 | 否（需人工确认） |
 | `test_joint_controller_left_arm.py` | 左臂关节 | 否（需人工确认） |
 | `test_end_effector_controller.py` | 末端爪子 | 否（需人工确认） |
 | `test_camera_controller.py` | 摄像头 | 是（需 GDK 环境） |
+| `camera.html` / `camera.js` | 四路真实摄像头集成测试页面 | 是（需服务层和真实相机） |
+| `test_camera_web.sh` | Playwright 四路摄像头按钮测试 | 是（不涉及机器人运动） |
 | `test_interaction_controller.py` | TTS | 是（需 GDK 环境） |
 | `test_apriltag_controller.py` | Apriltag | 是（.venv-apriltag 环境） |
 
@@ -173,6 +231,12 @@ python3 test/services2/test_database_controller.py
 # 需要 GDK 的测试（先激活环境）
 source ~/app/env.bash
 python3 test/services2/test_chassis_controller_stop.py
+
+# 地图测试页面位于 test/services2/maptest.html
+# 页面可分别显示/隐藏地图与激光点图层，并可通过按钮放大、缩小地图画面
+
+# Playwright 只读取真实数据，不点击运动和数据库写入按钮
+bash test/services2/test_maptest_web.sh
 
 # Apriltag 测试（使用独立虚拟环境）
 source .venv-apriltag/bin/activate

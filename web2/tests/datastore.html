@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>变量存储与运动测试</title>
+</head>
+<body>
+  <main>
+    <h1>变量存储与运动测试</h1>
+    <p id="mode"></p>
+
+    <fieldset>
+      <legend>MQTT 连接</legend>
+      <label>Broker <input id="broker"></label>
+      <label>WebSocket 端口 <input id="port" value="9001" size="6"></label>
+      <button id="connect" type="button">连接</button>
+      <span id="connection-status">未连接</span>
+    </fieldset>
+
+    <h2>保存当前变量</h2>
+    <div id="save-actions"></div>
+    <p id="operation-status">尚未操作</p>
+
+    <h2>已保存变量</h2>
+    <button id="refresh" type="button">读取变量</button>
+    <table border="1">
+      <thead>
+        <tr>
+          <th>选择</th>
+          <th>变量名</th>
+          <th>类型</th>
+          <th>变量值</th>
+        </tr>
+      </thead>
+      <tbody id="variables"></tbody>
+    </table>
+
+    <p>当前选择：<span id="selected-name">无</span></p>
+    <button id="move" type="button" disabled>运行到这个位置</button>
+
+    <h2>MQTT 日志</h2>
+    <pre id="log"></pre>
+  </main>
+
+  <script src="../vendor/paho-mqtt.min.js"></script>
+  <script type="module" src="./datastore.js"></script>
+</body>
+</html>

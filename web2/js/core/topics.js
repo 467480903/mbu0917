@@ -7,6 +7,7 @@ export const TOPICS = Object.freeze({
   camera: { request: '/humanoid/camera/request/', response: '/humanoid/camera/response/' },
   apriltag: { request: '/humanoid/apriltag/request/', response: '/humanoid/apriltag/response/' },
   db: { request: '/humanoid/db/request/', response: '/humanoid/db/response/' },
+  maptest: { request: '/humanoid/maptest/request/', response: '/humanoid/maptest/response/' },
   sync: { request: '/humanoid/sync/request/', response: '/humanoid/sync/response/', data: '/humanoid/sync/data/' },
   done: '/humanoid/done/',
 });

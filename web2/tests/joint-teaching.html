@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>关节示教功能测试</title>
+</head>
+<body>
+  <h1>关节示教功能测试</h1>
+  <p id="mode"></p>
+  <fieldset>
+    <legend>MQTT 连接</legend>
+    <label>Broker <input id="broker"></label>
+    <label>端口 <input id="port" value="9001" size="6"></label>
+    <button id="connect" type="button">连接</button>
+    <span id="connection-status">未连接</span>
+  </fieldset>
+
+  <p>
+    <button id="read" type="button">读取当前关节</button>
+    <label>微调步长(rad) <input id="step" type="number" value="0.02" min="0.001" max="0.5" step="0.01"></label>
+  </p>
+  <table border="1">
+    <thead><tr><th>分组</th><th>关节名称</th><th>目标角度(rad)</th><th>微调</th></tr></thead>
+    <tbody id="joint-rows"></tbody>
+  </table>
+
+  <h2>执行或保存</h2>
+  <p>
+    <label>范围
+      <select id="scope">
+        <option value="wbc">全身轴关节</option>
+        <option value="left_arm">左手关节</option>
+        <option value="right_arm">右手关节</option>
+        <option value="single_joint">任意单关节</option>
+      </select>
+    </label>
+    <label id="single-wrap" hidden>关节 <select id="single-joint"></select></label>
+    <label>角速度 <input id="speed" type="number" value="0.2" min="0.01" max="1" step="0.05"></label>
+  </p>
+  <p>
+    <label>变量名 <input id="variable-name" placeholder="请输入变量名"></label>
+  </p>
+  <p>
+    <button id="execute" type="button">执行当前目标</button>
+    <button id="save" type="button">创建关节变量</button>
+  </p>
+  <p><strong>状态：</strong><span id="status">尚未操作</span></p>
+  <h2>MQTT 日志</h2>
+  <pre id="log"></pre>
+  <script src="../vendor/paho-mqtt.min.js"></script>
+  <script type="module" src="./joint-teaching.js"></script>
+</body>
+</html>

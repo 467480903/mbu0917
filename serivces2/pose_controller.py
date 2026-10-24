@@ -8,6 +8,7 @@ pose_controller.py — 位姿控制器
   - 控制腰部运动（上下前后）
 """
 
+import json
 import math
 import time
 import threading
@@ -36,6 +37,9 @@ class PoseController:
         self.topic_response = topic_response
         self.topic_done = topic_done
         self._lock = threading.Lock()
+        self.status_topic = "/humanoid/status/data"
+        self._status_stop = threading.Event()
+        self._status_thread = None
         
         # 末端 link 名
         self.left_name = "arm_l_end_link"
@@ -161,6 +165,63 @@ class PoseController:
             "position": [float(value) for value in pose["position"]],
             "orientation": [float(value) for value in pose["orientation"]],
         }
+
+    def get_end_effector_status(self):
+        """一次读取并返回左右末端位姿。"""
+        status = self.robot.get_motion_control_status()
+        left = self.find_pose_in_status(status, self.left_name)
+        right = self.find_pose_in_status(status, self.right_name)
+        return {"left_ee": left, "right_ee": right}
+
+    @staticmethod
+    def find_pose_in_status(status, target_name):
+        """从已有运动状态中读取指定末端，避免重复调用 GDK。"""
+        for index, frame_name in enumerate(status.frame_names):
+            if frame_name != target_name:
+                continue
+            pose = status.frame_poses[index]
+            return {
+                "position": [
+                    round(float(pose.position.x), 6),
+                    round(float(pose.position.y), 6),
+                    round(float(pose.position.z), 6),
+                ],
+                "orientation": [
+                    round(float(pose.orientation.x), 6),
+                    round(float(pose.orientation.y), 6),
+                    round(float(pose.orientation.z), 6),
+                    round(float(pose.orientation.w), 6),
+                ],
+            }
+        return None
+
+    def publish_status(self):
+        payload = {"timestamp": time.strftime("%Y-%m-%d %H:%M:%S")}
+        payload.update(self.get_end_effector_status())
+        self.mqtt_client.publish(
+            self.status_topic, json.dumps(payload, ensure_ascii=False), qos=0)
+        return payload
+
+    def _status_loop(self, interval):
+        while not self._status_stop.is_set():
+            try:
+                self.publish_status()
+            except Exception as error:
+                print(f"[末端位姿状态] 发布失败: {error}")
+            self._status_stop.wait(interval)
+
+    def start_status_publishing(self, interval=0.2):
+        if self._status_thread and self._status_thread.is_alive():
+            return
+        self._status_stop.clear()
+        self._status_thread = threading.Thread(
+            target=self._status_loop, args=(interval,), daemon=True,
+            name="pose-status")
+        self._status_thread.start()
+        print(f"[末端位姿状态] 发布线程已启动，频率={1.0 / interval:.1f}Hz")
+
+    def stop_status_publishing(self):
+        self._status_stop.set()
     
     # ── 运动执行（不嵌套，直接调用 GDK）────────────────────
     

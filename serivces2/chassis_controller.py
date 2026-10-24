@@ -14,10 +14,15 @@ chassis_controller.py — 底盘控制器
   - 单位：x/y 为毫米，rotate 为角度，vel_line 为米/秒，vel_rotate 为度/秒
 """
 
+import base64
+import gzip
+import json
 import math
-import time
 import signal
+import struct
 import sys
+import threading
+import time
 
 
 class ChassisController:
@@ -41,9 +46,17 @@ class ChassisController:
         self.pnc = self.agibot_gdk.Pnc()
         self.slam = self.agibot_gdk.Slam()
         self.map = self.agibot_gdk.Map()
+        self.lidar = self.agibot_gdk.Lidar()
+        self.robot = self.agibot_gdk.Robot()
         self.mqtt_client = mqtt_client
         self.topic_response = topic_response
         self.topic_done = topic_done
+        self.status_topic = "/humanoid/status/data"
+        self.cloud_topic = "/humanoid/status/cloud"
+        self._status_stop = threading.Event()
+        self._status_thread = None
+        self._cloud_enabled = threading.Event()
+        self._is_mapping = False
         self._chassis_mode = -1  # -1=未申请, 0=Ackermann, 1=蟹行
         
         # 导航任务状态码
@@ -174,12 +187,265 @@ class ChassisController:
                     point.pt.orientation.z,
                     point.pt.orientation.w,
                 ],
-                "type": point.type,
+                "type": str(point.type),
             })
 
         points.sort(key=lambda item: item["name"])
         print(f"[底盘] 当前地图 id={current_map.id}，读取到 {len(points)} 个点位")
         return points
+
+    def get_map_data(self):
+        """读取当前地图的 OccupancyGrid，并编码为浏览器可传输的数据。"""
+        current_map = self.map.get_curr_map()
+        map_info = self.map.get_map(current_map.id)
+        grid = map_info.grid_map
+        origin = grid.origin
+        raw = struct.pack(f"{len(grid.data)}b", *grid.data)
+        compressed = gzip.compress(raw, compresslevel=6)
+        return {
+            "id": current_map.id,
+            "name": str(getattr(map_info, "name", "")),
+            "width": grid.width,
+            "height": grid.height,
+            "resolution": grid.resolution,
+            "origin": {
+                "position": [origin.position.x, origin.position.y, origin.position.z],
+                "orientation": [
+                    origin.orientation.x, origin.orientation.y,
+                    origin.orientation.z, origin.orientation.w,
+                ],
+            },
+            "data_encoding": "gzip-base64",
+            "data_b64": base64.b64encode(compressed).decode("ascii"),
+        }
+
+    def get_legacy_map_grid(self, map_id=None):
+        """读取旧 web 使用的未压缩 base64 栅格地图。"""
+        if map_id is None:
+            map_id = self.map.get_curr_map().id
+        map_info = self.map.get_map(int(map_id))
+        grid = map_info.grid_map
+        origin = grid.origin
+        raw = struct.pack(f"{len(grid.data)}b", *grid.data)
+        return {
+            "map_id": map_info.id,
+            "map_name": str(getattr(map_info, "name", "")),
+            "width": grid.width,
+            "height": grid.height,
+            "resolution": grid.resolution,
+            "origin": {
+                "position": [origin.position.x, origin.position.y, origin.position.z],
+                "orientation": [
+                    origin.orientation.x, origin.orientation.y,
+                    origin.orientation.z, origin.orientation.w,
+                ],
+            },
+            "data_b64": base64.b64encode(raw).decode("ascii"),
+        }
+
+    def get_maps(self):
+        """读取机器人内全部地图，用于旧 web 地图选择器。"""
+        return [
+            {
+                "id": item.id,
+                "name": str(item.name),
+                "is_current": bool(item.is_curr_map),
+            }
+            for item in self.map.get_all_map()
+        ]
+
+    def switch_map(self, map_id):
+        self.map.switch_map(int(map_id))
+        return True
+
+    def start_mapping(self):
+        self.slam.start_mapping()
+        self._is_mapping = True
+        return True
+
+    def stop_mapping(self):
+        self.slam.stop_mapping()
+        self._is_mapping = False
+        return True
+
+    def is_mapping(self):
+        return self._is_mapping
+
+    @staticmethod
+    def _point_field_offsets(pointcloud):
+        return {
+            field.name: field.offset
+            for field in pointcloud.fields
+            if field.name in {"x", "y", "z"}
+        }
+
+    def _read_lidar_points(self, lidar_type, source, sample_step, max_distance):
+        pointcloud = None
+        last_error = None
+        for _ in range(3):
+            try:
+                pointcloud = self.lidar.get_latest_pointcloud(lidar_type, 1000.0)
+            except Exception as exc:
+                last_error = exc
+            if pointcloud is not None:
+                break
+            time.sleep(0.2)
+        if pointcloud is None and last_error is not None:
+            print(f"[底盘] {source} 激光点云暂不可用: {last_error}")
+        if pointcloud is None or pointcloud.point_step <= 0:
+            return []
+        offsets = self._point_field_offsets(pointcloud)
+        if not {"x", "y", "z"}.issubset(offsets):
+            return []
+        raw = bytes(pointcloud.data)
+        count = len(raw) // pointcloud.point_step
+        points = []
+        for index in range(0, count, sample_step):
+            base = index * pointcloud.point_step
+            x = struct.unpack_from("<f", raw, base + offsets["x"])[0]
+            y = struct.unpack_from("<f", raw, base + offsets["y"])[0]
+            z = struct.unpack_from("<f", raw, base + offsets["z"])[0]
+            if not all(math.isfinite(value) for value in (x, y, z)):
+                continue
+            if math.sqrt(x * x + y * y + z * z) > max_distance:
+                continue
+            points.append([round(x, 3), round(y, 3), round(z, 3), source])
+        return points
+
+    def get_laser_points(self, sample_step=4, max_distance=30.0):
+        """读取前后激光雷达点云，过滤并降采样。"""
+        front = self._read_lidar_points(
+            self.agibot_gdk.LidarType.kLidarFront,
+            "front", sample_step, max_distance)
+        back = self._read_lidar_points(
+            self.agibot_gdk.LidarType.kLidarBack,
+            "back", sample_step, max_distance)
+        return {
+            "points": front + back,
+            "count": len(front) + len(back),
+            "front": len(front),
+            "back": len(back),
+        }
+
+    def get_current_map_pose(self):
+        """读取底盘当前在地图坐标系中的位置、朝向与定位状态。"""
+        pose = self.slam.get_curr_pose()
+        result = {
+            "position": [pose.position.x, pose.position.y, pose.position.z],
+            "orientation": [
+                pose.orientation.x, pose.orientation.y,
+                pose.orientation.z, pose.orientation.w,
+            ],
+            "yaw": self._quat_to_yaw(
+                pose.orientation.x, pose.orientation.y,
+                pose.orientation.z, pose.orientation.w),
+            "loc_state": -1,
+            "loc_confidence": 0.0,
+        }
+        try:
+            odom = self.slam.get_odom_info()
+            result["loc_state"] = odom.loc_state
+            result["loc_confidence"] = odom.loc_confidence
+        except Exception:
+            pass
+        return result
+
+    def publish_status(self):
+        """发布旧 web 所需的底盘地图坐标状态片段。"""
+        pose = self.get_current_map_pose()
+        payload = {
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "chassis": {
+                "x": round(float(pose["position"][0]), 6),
+                "y": round(float(pose["position"][1]), 6),
+                "z": round(float(pose["position"][2]), 6),
+                "yaw": round(float(pose["yaw"]), 6),
+                "loc_state": pose["loc_state"],
+                "loc_confidence": round(float(pose["loc_confidence"]), 4),
+            },
+        }
+        self.mqtt_client.publish(
+            self.status_topic, json.dumps(payload, ensure_ascii=False), qos=0)
+        return payload
+
+    def publish_cloud(self):
+        """按旧 web 格式发布降采样后的前后激光点云。"""
+        laser = self.get_laser_points()
+        payload = {
+            "timestamp": int(time.time() * 1_000_000_000),
+            "count": laser["count"],
+            "front_count": laser["front"],
+            "back_count": laser["back"],
+            "points": [point[:3] for point in laser["points"]],
+        }
+        self.mqtt_client.publish(
+            self.cloud_topic, json.dumps(payload, ensure_ascii=False), qos=0)
+        return payload
+
+    def set_cloud_publishing(self, enabled):
+        if enabled:
+            self._cloud_enabled.set()
+        else:
+            self._cloud_enabled.clear()
+        print(f"[底盘状态] 激光点云发布{'开启' if enabled else '关闭'}")
+
+    def _status_loop(self, status_interval, cloud_interval):
+        last_cloud = 0.0
+        while not self._status_stop.is_set():
+            started = time.monotonic()
+            try:
+                self.publish_status()
+            except Exception as error:
+                print(f"[底盘状态] 发布失败: {error}")
+            if self._cloud_enabled.is_set() and started - last_cloud >= cloud_interval:
+                try:
+                    self.publish_cloud()
+                except Exception as error:
+                    print(f"[激光点云] 发布失败: {error}")
+                last_cloud = started
+            elapsed = time.monotonic() - started
+            self._status_stop.wait(max(0.0, status_interval - elapsed))
+
+    def start_status_publishing(self, status_interval=0.2, cloud_interval=1.0):
+        if self._status_thread and self._status_thread.is_alive():
+            return
+        self._status_stop.clear()
+        self._status_thread = threading.Thread(
+            target=self._status_loop,
+            args=(status_interval, cloud_interval), daemon=True,
+            name="chassis-status")
+        self._status_thread.start()
+        print(f"[底盘状态] 发布线程已启动，频率={1.0 / status_interval:.1f}Hz")
+
+    def stop_status_publishing(self):
+        self._status_stop.set()
+
+    def get_battery(self):
+        """读取底盘电池组状态与平均电量。"""
+        power = self.robot.get_chassis_power_state()
+        batteries = []
+        for index, state in enumerate(power.battery_states):
+            batteries.append({
+                "index": index + 1,
+                "soc": state.battery_soc,
+                "soh": state.battery_soh,
+                "voltage": state.battery_output_voltage,
+                "current": state.battery_output_current,
+                "temperature": state.battery_temperature,
+                "charging": bool(state.battery_charging_status),
+            })
+        soc = sum(item["soc"] for item in batteries) / len(batteries) if batteries else None
+        return {"soc": round(soc, 1) if soc is not None else None, "batteries": batteries}
+
+    def get_map_snapshot(self):
+        """一次读取页面展示所需的全部真实机器人地图数据。"""
+        return {
+            "map": self.get_map_data(),
+            "laser": self.get_laser_points(),
+            "points": self.get_map_points(),
+            "pose": self.get_current_map_pose(),
+            "battery": self.get_battery(),
+        }
     
     @staticmethod
     def _quat_to_yaw(x, y, z, w):
@@ -345,10 +611,9 @@ class ChassisController:
         
 
     def point_move(self, point, timeout=120.0):
-        
-        self.point_move2(self,point)
-        
-        return self._wait_navi_done(timeout)        
+        if not self.point_move2(point):
+            return False
+        return self._wait_navi_done(timeout)
     
     def points_move(self, points, vel_line=0.25, vel_rotate_deg=10.0, timeout=120.0):
         """多点运动

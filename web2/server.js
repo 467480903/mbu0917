@@ -3,6 +3,9 @@ const fs = require('fs');
 const path = require('path');
 
 const root = __dirname;
+const serviceTestsRoot = path.resolve(__dirname, '..', 'test', 'services2');
+const imagesRoot = path.resolve(__dirname, '..', 'images');
+const legacyRoot = path.resolve(__dirname, '..', 'web');
 const host = process.env.HOST || '0.0.0.0';
 const port = Number(process.env.PORT || 8003);
 const mimeTypes = {
@@ -13,6 +16,8 @@ const mimeTypes = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.svg': 'image/svg+xml',
+  '.stl': 'model/stl',
+  '.urdf': 'application/xml; charset=utf-8',
 };
 
 http.createServer((request, response) => {
@@ -27,9 +32,21 @@ http.createServer((request, response) => {
     response.writeHead(400).end('Bad request');
     return;
   }
-  const relative = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
-  const filename = path.resolve(root, relative);
-  if (filename !== root && !filename.startsWith(root + path.sep)) {
+  const isServiceTest = pathname.startsWith('/service-tests/');
+  const isImage = pathname.startsWith('/images/');
+  const isLegacy = pathname.startsWith('/legacy/');
+  const selectedRoot = isServiceTest
+    ? serviceTestsRoot
+    : (isImage ? imagesRoot : (isLegacy ? legacyRoot : root));
+  const relative = isServiceTest
+    ? pathname.slice('/service-tests/'.length)
+    : (isImage
+      ? pathname.slice('/images/'.length)
+      : (isLegacy
+        ? pathname.slice('/legacy/'.length)
+        : (pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, ''))));
+  const filename = path.resolve(selectedRoot, relative);
+  if (filename !== selectedRoot && !filename.startsWith(selectedRoot + path.sep)) {
     response.writeHead(403).end('Forbidden');
     return;
   }

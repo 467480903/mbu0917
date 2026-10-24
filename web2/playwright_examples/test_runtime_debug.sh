@@ -5,7 +5,7 @@ skill_home="${CODEX_HOME:-$HOME/.codex}"
 pwcli="${skill_home}/skills/playwright/scripts/playwright_cli.sh"
 web2_host="${WEB2_HOST:-10.42.1.101}"
 web2_port="${WEB2_PORT:-8003}"
-step_delay="${PW_STEP_DELAY:-2}"
+step_delay="${PW_STEP_DELAY:-1}"
 keep_open="${PW_KEEP_OPEN:-1}"
 url="http://${web2_host}:${web2_port}/tests/runtime-debug.html"
 

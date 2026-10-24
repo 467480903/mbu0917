@@ -24,7 +24,7 @@ export function mountPage(root, requestedModule) {
           <h2 class="brand">G2 / web2</h2>
           <p class="subtitle">面向测试的模块化控制台</p>
           <nav class="nav">${modules.map(module => `
-            <a href="${requestedModule ? '../tests/' + module.key + '.html' : './index.html?module=' + module.key + (mockMode ? '&mock=1' : '')}"
+            <a href="${requestedModule ? '../tests/' + module.key + '.html' : './console.html?module=' + module.key + (mockMode ? '&mock=1' : '')}"
                data-module="${module.key}" class="${module.key === active.key ? 'active' : ''}">
               <span>${escapeHtml(module.title)}</span><small>${module.commands.length}</small>
             </a>`).join('')}</nav>
@@ -38,12 +38,26 @@ export function mountPage(root, requestedModule) {
             </section>
           </div>
           <div class="toolbar"><span class="pill ${mockMode ? 'mock' : ''}">${mockMode ? '模拟 MQTT（不下发到机器人）' : '真实 MQTT'}</span><a class="test-link" href="${requestedModule ? '../index.html?module=' + active.key + '&mock=1' : './tests/index.html'}">测试页入口</a></div>
+          ${requestedModule ? '' : integratedWorkspace()}
           <section class="cards">${active.commands.map((command, index) => commandCard(command, index)).join('')}</section>
           <section class="console"><header><span>MQTT 事件日志</span><button id="clear-log">清空</button></header><pre id="log">${escapeHtml(logs.join('\n'))}</pre></section>
         </main>
       </div>`;
     bind(active);
   };
+
+  const integratedWorkspace = () => `
+    <section class="workspace" aria-label="集成功能入口">
+      <h2>集成功能</h2>
+      <p>统一入口用于联调；单项验证请进入对应的简洁功能测试页。</p>
+      <div class="workspace-links">
+        <a href="./tests/urdf.html">机器人模型</a>
+        <a href="./tests/datastore.html?live=1">变量管理</a>
+        <a href="./tests/runtime-debug.html?live=1">程序调试</a>
+        <a href="/service-tests/camera.html">摄像头</a>
+        <a href="/service-tests/maptest.html">地图与底盘</a>
+      </div>
+    </section>`;
 
   const commandCard = (command, index) => {
     const body = JSON.stringify({ cmd: command.cmd, ...command.payload }, null, 2);

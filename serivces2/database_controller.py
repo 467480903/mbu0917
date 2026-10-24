@@ -49,6 +49,7 @@ class DatabaseController:
             self._mem_conn.backup(self._file_conn)
             print(f"[DB] 已创建新数据库: {self.db_path}")
         self._create_tables()
+        self._normalize_existing_positions()
         print("[DB] 初始化完成")
 
     def _create_tables(self):
@@ -71,6 +72,71 @@ class DatabaseController:
 
     def _sync_to_file(self):
         self._mem_conn.backup(self._file_conn)
+
+    @staticmethod
+    def _normalize_position_value(value):
+        """将末端姿态统一为 x/y/z/rx/ry/rz 六字段格式。"""
+        if not isinstance(value, dict):
+            raise ValueError("坐标姿态必须是 JSON 对象")
+
+        if "left" in value or "right" in value:
+            if not isinstance(value.get("left"), dict) or not isinstance(value.get("right"), dict):
+                raise ValueError("双臂坐标姿态必须同时包含 left/right")
+            return {
+                "left": DatabaseController._normalize_position_value(value["left"]),
+                "right": DatabaseController._normalize_position_value(value["right"]),
+            }
+
+        position = value.get("position")
+        if position is not None:
+            if not isinstance(position, (list, tuple)) or len(position) != 3:
+                raise ValueError("position 必须包含 3 个分量")
+            x, y, z = position
+        else:
+            x, y, z = (value.get(key, 0.0) for key in ("x", "y", "z"))
+
+        orientation = value.get("orientation")
+        if orientation is not None:
+            if not isinstance(orientation, (list, tuple)) or len(orientation) != 4:
+                raise ValueError("orientation 必须包含 4 个四元数分量")
+            qx, qy, qz, qw = (float(component) for component in orientation)
+            norm = math.sqrt(qx * qx + qy * qy + qz * qz + qw * qw)
+            if not math.isfinite(norm) or norm == 0.0:
+                raise ValueError("orientation 四元数无效")
+            qx, qy, qz, qw = (component / norm for component in (qx, qy, qz, qw))
+            if qw < 0.0:
+                qx, qy, qz = -qx, -qy, -qz
+            rx, ry, rz = qx, qy, qz
+        else:
+            rx, ry, rz = (value.get(key, 0.0) for key in ("rx", "ry", "rz"))
+
+        result = {
+            "x": float(x), "y": float(y), "z": float(z),
+            "rx": float(rx), "ry": float(ry), "rz": float(rz),
+        }
+        if not all(math.isfinite(component) for component in result.values()):
+            raise ValueError("坐标姿态包含非有限数值")
+        return result
+
+    def _normalize_existing_positions(self):
+        """迁移历史姿态记录，并同步到磁盘数据库。"""
+        cur = self._mem_conn.cursor()
+        cur.execute("SELECT id,name,value FROM positions")
+        updated = 0
+        for row_id, name, raw_value in cur.fetchall():
+            try:
+                normalized = self._normalize_position_value(json.loads(raw_value))
+            except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                print(f"[DB] 跳过无法规范化的位姿 {name}: {exc}")
+                continue
+            normalized_json = json.dumps(normalized, ensure_ascii=False)
+            if json.loads(raw_value) != normalized:
+                cur.execute("UPDATE positions SET value=? WHERE id=?", (normalized_json, row_id))
+                updated += 1
+        if updated:
+            self._mem_conn.commit()
+            self._sync_to_file()
+            print(f"[DB] 已统一 {updated} 条位姿记录为 x/y/z/rx/ry/rz")
 
     # ── 内部查找（非公开查询）──────────────────────────────
     def _find_joints_by_name(self, name):
@@ -187,13 +253,14 @@ class DatabaseController:
     # ═══════════════════════════════════════════════════════
     def add_positions(self, ptype, name, value):
         """新增坐标姿态（同类型同名已存在则失败）"""
+        normalized = self._normalize_position_value(value)
         with self._lock:
             cur = self._mem_conn.cursor()
             cur.execute("SELECT 1 FROM positions WHERE type=? AND name=?", (ptype, name))
             if cur.fetchone():
                 return False
             cur.execute("INSERT INTO positions(type,name,value) VALUES(?,?,?)",
-                        (ptype, name, json.dumps(value, ensure_ascii=False)))
+                        (ptype, name, json.dumps(normalized, ensure_ascii=False)))
             self._mem_conn.commit()
             self._sync_to_file()
         print(f"[DB] 新增位姿: {ptype}/{name}")
@@ -201,10 +268,11 @@ class DatabaseController:
 
     def update_positions(self, ptype, name, value):
         """修改坐标姿态（不存在则失败）"""
+        normalized = self._normalize_position_value(value)
         with self._lock:
             cur = self._mem_conn.cursor()
             cur.execute("UPDATE positions SET value=? WHERE type=? AND name=?",
-                        (json.dumps(value, ensure_ascii=False), ptype, name))
+                        (json.dumps(normalized, ensure_ascii=False), ptype, name))
             if cur.rowcount == 0:
                 return False
             self._mem_conn.commit()

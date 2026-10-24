@@ -261,9 +261,14 @@ const App = {
             this.currentMenu = this.currentMenu === id ? '' : id;
         },
         onStatus(data) {
-            this.robotStatus = data;
+            // serivces2 由关节、末端位姿、底盘和夹爪控制器分别发布状态片段。
+            // 合并片段，避免后到的模块覆盖其他模块已经收到的状态。
+            this.robotStatus = {
+                ...(this.robotStatus || {}),
+                ...(data || {}),
+            };
             // 同步关节到 3D 模型
-            if (data.joints && this.urdfViewer) {
+            if (data && data.joints && this.urdfViewer) {
                 this.urdfViewer.setJointsFromStatus(data.joints);
             }
         }

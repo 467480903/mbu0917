@@ -5,6 +5,7 @@
 import json
 import math
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 import agibot_gdk
@@ -33,6 +34,26 @@ class ServiceApplication:
         self.sync_request = "/humanoid/sync/request/"
         self.sync_response = "/humanoid/sync/response/"
         self.sync_data = "/humanoid/sync/data/"
+        self.legacy_topics = {
+            "status_control": "/humanoid/status/control",
+            "camera_control": "/humanoid/camera/control",
+            "joints_control": "/humanoid/joints/control",
+            "commands": "/humanoid/commands/data",
+            "commands_done": "/humanoid/commands/done",
+            "map_control": "/humanoid/map/control",
+            "map_points": "/humanoid/map/points",
+            "map_info": "/humanoid/map/info",
+            "map_grid": "/humanoid/map/grid",
+            "joints_save": "/humanoid/joints/save",
+            "joints_data": "/humanoid/joints/data",
+            "positions_control": "/humanoid/positions/control",
+            "positions_data": "/humanoid/positions/data",
+            "map_db_control": "/humanoid/map/db_control",
+            "map_db_data": "/humanoid/map/db_data",
+            "modbus_control": "/humanoid/modbus/control",
+            "modbus_data": "/humanoid/modbus/data",
+        }
+        self._status_publishers_started = False
         self.motion_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="motion")
         self.io_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="service")
         self.client = mqtt.Client(
@@ -133,10 +154,22 @@ class ServiceApplication:
             if isinstance(value, dict) and "request" in value
         ]
         request_topics.append(self.sync_request)
+        request_topics.extend([
+            self.legacy_topics["status_control"],
+            self.legacy_topics["camera_control"],
+            self.legacy_topics["joints_control"],
+            self.legacy_topics["commands"],
+            self.legacy_topics["map_control"],
+            self.legacy_topics["joints_save"],
+            self.legacy_topics["positions_control"],
+            self.legacy_topics["map_db_control"],
+            self.legacy_topics["modbus_control"],
+        ])
         for topic in request_topics:
             client.subscribe(topic, qos=2)
             print(f"[MQTT] 已订阅 {topic}")
         self.controllers["sync"].start_polling()
+        self._start_status_publishers()
 
     def _on_message(self, client, userdata, message):
         try:
@@ -149,11 +182,27 @@ class ServiceApplication:
         motion_topics = {
             self.topics[name]["request"] for name in ("base", "joint", "pose", "ee")
         }
+        motion_topics.update({
+            self.legacy_topics["joints_control"],
+            self.legacy_topics["commands"],
+        })
+        if message.topic == self.legacy_topics["positions_control"] and payload.get("command") == "goto":
+            motion_topics.add(message.topic)
+        if message.topic == self.legacy_topics["map_db_control"] and payload.get("command") == "goto":
+            motion_topics.add(message.topic)
         if message.topic == self.topics["db"]["request"] and payload.get("cmd") in {
             "moveJoint", "movePosition", "moveMapPoint"
         }:
             motion_topics.add(message.topic)
-        executor = self.motion_executor if message.topic in motion_topics else self.io_executor
+        is_emergency_stop = (
+            message.topic == self.topics["base"]["request"]
+            and payload.get("cmd") == "stop"
+        )
+        executor = (
+            self.motion_executor
+            if message.topic in motion_topics and not is_emergency_stop
+            else self.io_executor
+        )
         executor.submit(self._dispatch_safely, message.topic, payload)
 
     def _dispatch_safely(self, topic, payload):
@@ -173,7 +222,17 @@ class ServiceApplication:
             self.topics["camera"]["request"]: self._handle_camera,
             self.topics["apriltag"]["request"]: self._handle_apriltag,
             self.topics["db"]["request"]: self._handle_database,
+            self.topics["maptest"]["request"]: self._handle_maptest,
             self.sync_request: self._handle_sync,
+            self.legacy_topics["status_control"]: self._handle_legacy_status_control,
+            self.legacy_topics["camera_control"]: self._handle_legacy_camera,
+            self.legacy_topics["joints_control"]: self._handle_legacy_joint,
+            self.legacy_topics["commands"]: self._handle_legacy_command,
+            self.legacy_topics["map_control"]: self._handle_legacy_map,
+            self.legacy_topics["joints_save"]: self._handle_legacy_data,
+            self.legacy_topics["positions_control"]: self._handle_legacy_position,
+            self.legacy_topics["map_db_control"]: self._handle_legacy_map_database,
+            self.legacy_topics["modbus_control"]: self._handle_legacy_sync,
         }
         handler = routes.get(topic)
         if handler is None:
@@ -213,6 +272,9 @@ class ServiceApplication:
                 payload.get("vel_line", 0.25), payload.get("vel_rotate", 10.0))
         elif cmd == "point":
             point = self._find_named(self.controllers["db"].get_map_points(), payload.get("name"))
+            if point is None:
+                point = self._find_named(
+                    controller.get_map_points(), payload.get("name"))
             if point is None:
                 raise KeyError(f"地图点位不存在: {payload.get('name')}")
             result = controller.point_move(point)
@@ -338,7 +400,10 @@ class ServiceApplication:
         self._response("apriltag", payload, True, result=result)
 
     def _move_stored_joint(self, payload):
-        item = self._find_named(self.controllers["db"].get_joints(), payload.get("name"))
+        expected_type = payload.get("type")
+        item = next((candidate for candidate in self.controllers["db"].get_joints()
+                     if str(candidate.get("name")) == str(payload.get("name"))
+                     and (not expected_type or candidate.get("type") == expected_type)), None)
         if item is None:
             raise KeyError(f"关节变量不存在: {payload.get('name')}")
         controller = self.controllers["joint"]
@@ -360,7 +425,10 @@ class ServiceApplication:
         return controller.move_wbc(value, speed)
 
     def _move_stored_position(self, payload):
-        item = self._find_named(self.controllers["db"].get_positions(), payload.get("name"))
+        expected_type = payload.get("type")
+        item = next((candidate for candidate in self.controllers["db"].get_positions()
+                     if str(candidate.get("name")) == str(payload.get("name"))
+                     and (not expected_type or candidate.get("type") == expected_type)), None)
         if item is None:
             raise KeyError(f"坐标姿态变量不存在: {payload.get('name')}")
         controller, value, kind = self.controllers["pose"], item["value"], item["type"]
@@ -413,6 +481,47 @@ class ServiceApplication:
             raise ValueError(f"未知数据库命令: {cmd}")
         self._response("db", payload, result is not False, name=payload.get("name"), result=result)
 
+    def _handle_maptest(self, payload):
+        cmd = payload.get("cmd")
+        controller = self.controllers["chassis"]
+        db = self.controllers["db"]
+        readers = {
+            "snapshot": controller.get_map_snapshot,
+            "map": controller.get_map_data,
+            "laser": controller.get_laser_points,
+            "points": controller.get_map_points,
+            "battery": controller.get_battery,
+        }
+        if cmd in readers:
+            self._response("maptest", payload, True, result=readers[cmd]())
+            return
+        if cmd == "save_current":
+            pose = controller.get_current_map_pose()
+            result = db.add_map_point(
+                payload["name"], pose["position"], pose["orientation"], "local")
+            if not result:
+                raise ValueError(f"地图点位已存在: {payload['name']}")
+            self._response("maptest", payload, True, result=True)
+            return
+        if cmd == "sync_points":
+            database_points = {item["name"] for item in db.get_map_points()}
+            added = 0
+            updated = 0
+            for point in controller.get_map_points():
+                if point["name"] in database_points:
+                    db.update_map_point(
+                        point["name"], point["position"], point["orientation"], "map")
+                    updated += 1
+                else:
+                    db.add_map_point(
+                        point["name"], point["position"], point["orientation"], "map")
+                    added += 1
+            self._response(
+                "maptest", payload, True,
+                result={"added": added, "updated": updated})
+            return
+        raise ValueError(f"未知地图测试命令: {cmd}")
+
     def _handle_sync(self, payload):
         cmd = payload.get("cmd")
         controller = self.controllers["sync"]
@@ -432,6 +541,316 @@ class ServiceApplication:
         else:
             raise ValueError(f"未知同步命令: {cmd}")
 
+    def _start_status_publishers(self):
+        """启动各控制器自己的状态发布器，不创建集中式状态服务。"""
+        if self._status_publishers_started:
+            return
+        self.controllers["joint"].start_status_publishing()
+        self.controllers["pose"].start_status_publishing()
+        self.controllers["chassis"].start_status_publishing()
+        self.controllers["ee"].start_status_publishing()
+        self.controllers["camera"].start_frame_cache()
+        self._status_publishers_started = True
+
+    def _stop_status_publishers(self):
+        if not self._status_publishers_started:
+            return
+        self.controllers["joint"].stop_status_publishing()
+        self.controllers["pose"].stop_status_publishing()
+        self.controllers["chassis"].stop_status_publishing()
+        self.controllers["ee"].stop_status_publishing()
+        self.controllers["camera"].stop_frame_cache()
+        self._status_publishers_started = False
+
+    def _publish_legacy(self, topic_key, payload):
+        self.client.publish(
+            self.legacy_topics[topic_key],
+            json.dumps(payload, ensure_ascii=False), qos=0)
+
+    def _handle_legacy_status_control(self, payload):
+        command = payload.get("command")
+        if command == "start_cloud":
+            self.controllers["chassis"].set_cloud_publishing(True)
+        elif command == "stop_cloud":
+            self.controllers["chassis"].set_cloud_publishing(False)
+        else:
+            raise ValueError(f"未知旧网页状态命令: {command}")
+
+    def _handle_legacy_camera(self, payload):
+        command = payload.get("command")
+        camera = self.controllers["camera"]
+        if command == "start":
+            camera.set_streaming(True)
+        elif command == "stop":
+            camera.set_streaming(False)
+        elif command == "start_continuous_capture":
+            camera.set_continuous_capture(True)
+        elif command == "stop_continuous_capture":
+            camera.set_continuous_capture(False)
+        elif command == "save_photo":
+            names = payload.get("cameras") or ["kHeadColor", "kHeadDepth"]
+            for name in names:
+                camera.capture(name)
+        else:
+            raise ValueError(f"未知旧网页相机命令: {command}")
+
+    def _handle_legacy_joint(self, payload):
+        command = str(payload.get("command", ""))
+        data = payload.get("data")
+        speed = payload.get("speed")
+        controller = self.controllers["joint"]
+        if isinstance(data, str):
+            self._require_success(
+                self._move_stored_joint({"name": data, "type": command, "speed": speed}), command)
+            self._publish_legacy(
+                "commands_done", {"command": "done", "source": command})
+            return
+        methods = {
+            "WBC": lambda: controller.move_wbc(data, speed),
+            "arms": lambda: controller.move_arms(data, speed),
+            "left": lambda: controller.move_left_arm(
+                [data.get(key, 0.0) for key in controller.left_arm_joint_keys], speed),
+            "right": lambda: controller.move_right_arm(
+                [data.get(key, 0.0) for key in controller.right_arm_joint_keys], speed),
+            "head": lambda: controller.move_head(
+                [data.get(key, 0.0) for key in controller.head_joint_keys], speed),
+            "waist": lambda: controller.move_waist(
+                [data.get(key, 0.0) for key in controller.waist_joint_keys], speed),
+        }
+        if command not in methods:
+            raise ValueError(f"旧网页关节命令暂不支持: {command}")
+        self._require_success(methods[command](), command)
+        self._publish_legacy("commands_done", {"command": "done", "source": command})
+
+    def _handle_legacy_command(self, payload):
+        command = payload.get("command")
+        data = payload.get("data")
+        if command == "go_rel":
+            data = data or {}
+            result = self.controllers["chassis"].relative_move(
+                float(data.get("x", 0.0)) * 1000.0,
+                float(data.get("y", 0.0)) * 1000.0,
+                math.degrees(float(data.get("yaw_rad", 0.0))))
+        elif command == "go":
+            points = self.controllers["chassis"].get_map_points()
+            point = self._find_named(points, data)
+            if point is None and isinstance(data, int) and 0 <= data < len(points):
+                point = points[data]
+            if point is None:
+                raise KeyError(f"地图点位不存在: {data}")
+            result = self.controllers["chassis"].point_move(point)
+        elif command == "offset_move":
+            values = data or {}
+            result = True
+            if any(key.startswith("l") for key in values):
+                result = self.controllers["pose"].move_relative(
+                    "left",
+                    [values.get("lx", 0.0) / 1000.0,
+                     values.get("ly", 0.0) / 1000.0,
+                     values.get("lz", 0.0) / 1000.0],
+                    [values.get("lrx", 0.0), values.get("lry", 0.0), values.get("lrz", 0.0)])
+            if any(key.startswith("r") for key in values):
+                result = self.controllers["pose"].move_relative(
+                    "right",
+                    [values.get("rx", 0.0) / 1000.0,
+                     values.get("ry", 0.0) / 1000.0,
+                     values.get("rz", 0.0) / 1000.0],
+                    [values.get("rrx", 0.0), values.get("rry", 0.0), values.get("rrz", 0.0)]) and result
+        elif command == "grab":
+            values = data or {}
+            left = values.get("left")
+            right = values.get("right")
+            normalize = lambda value: max(0.0, min(1.0, float(value) / -0.7))
+            if left is not None and right is not None:
+                result = self.controllers["ee"].both_grippers(normalize(left), normalize(right))
+            elif left is not None:
+                result = self.controllers["ee"].left_gripper(normalize(left))
+            elif right is not None:
+                result = self.controllers["ee"].right_gripper(normalize(right))
+            else:
+                result = True
+        elif command == "tts":
+            result = self.controllers["tts"].speak(str(data))
+        else:
+            raise ValueError(f"旧网页动作命令暂不支持: {command}")
+        self._require_success(result, command)
+        self._publish_legacy("commands_done", {"command": "done", "source": command})
+
+    def _handle_legacy_map(self, payload):
+        command = payload.get("command")
+        data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+        chassis = self.controllers["chassis"]
+        if command in ("read_points", "read_map_points"):
+            points = chassis.get_map_points() + self.controllers["db"].get_map_points()
+            self._publish_legacy("map_points", {"command": "map_points", "data": points})
+        elif command == "read_maps":
+            self._publish_legacy("map_info", {"command": "maps", "data": chassis.get_maps()})
+            self._publish_legacy("map_info", {
+                "command": "slam_state", "data": {"is_mapping": chassis.is_mapping()}})
+            self._publish_legacy("map_grid", {
+                "command": "occupancy_grid", "data": chassis.get_legacy_map_grid()})
+        elif command == "load_grid":
+            self._publish_legacy("map_grid", {
+                "command": "occupancy_grid",
+                "data": chassis.get_legacy_map_grid(data.get("map_id"))})
+        elif command == "switch_map":
+            chassis.switch_map(data.get("map_id"))
+            self._handle_legacy_map({"command": "read_maps"})
+        elif command == "save_point":
+            name = data.get("name", "unnamed")
+            pose = chassis.get_current_map_pose()
+            self.controllers["db"].add_map_point(
+                name, pose["position"], pose["orientation"], "local")
+            self._handle_legacy_map({"command": "read_points"})
+        elif command == "start_mapping":
+            chassis.start_mapping()
+            self._publish_legacy("map_info", {
+                "command": "slam_state", "data": {"is_mapping": True}})
+        elif command in ("stop_mapping", "save_map"):
+            chassis.stop_mapping()
+            self._publish_legacy("map_info", {
+                "command": "slam_state", "data": {"is_mapping": False}})
+        else:
+            raise ValueError(f"未知旧网页地图命令: {command}")
+
+    def _publish_legacy_data(self):
+        db = self.controllers["db"]
+        items = [dict(item, category="joints") for item in db.get_joints()]
+        items.extend(dict(item, category="positions") for item in db.get_positions())
+        self._publish_legacy(
+            "joints_data", {"command": "response", "data": items})
+
+    def _handle_legacy_data(self, payload):
+        """处理旧 web 的示教数据保存、读取、更新和删除。"""
+        command = payload.get("command")
+        db = self.controllers["db"]
+        category = payload.get("category", "joints")
+        kind = payload.get("type", "WBC")
+        name = payload.get("name", "unnamed")
+        data = payload.get("data", {})
+        if command == "save_joints":
+            success = db.add_joints(kind, name, data)
+        elif command == "save_position":
+            success = db.add_positions(kind, name, data)
+        elif command == "read":
+            self._publish_legacy_data()
+            return
+        elif command == "update" and category == "positions":
+            success = db.update_positions(kind, name, data)
+        elif command == "update":
+            success = db.update_joints(kind, name, data)
+        elif command == "delete" and category == "positions":
+            success = db.delete_positions(kind, name)
+        elif command == "delete":
+            success = db.delete_joints(kind, name)
+        else:
+            raise ValueError(f"未知旧网页数据命令: {command}")
+        if not success:
+            raise ValueError(f"数据操作失败或名称已存在: {kind}/{name}")
+        self._publish_legacy_data()
+
+    @staticmethod
+    def _pose_for_database(pose):
+        position = pose["position"]
+        orientation = pose["orientation"]
+        return {
+            "x": position[0], "y": position[1], "z": position[2],
+            "rx": orientation[0], "ry": orientation[1], "rz": orientation[2],
+        }
+
+    def _handle_legacy_position(self, payload):
+        command = payload.get("command")
+        data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+        kind, name = data.get("type"), data.get("name")
+        db = self.controllers["db"]
+        if kind not in ("left", "right", "both") or not name:
+            raise ValueError("坐标点位缺少有效的 type/name")
+        if command == "goto":
+            success = self._move_stored_position({"name": name, "type": kind})
+        elif command == "update":
+            pose = self.controllers["pose"]
+            if kind == "both":
+                value = {
+                    "left": self._pose_for_database(pose.get_current_pose("left")),
+                    "right": self._pose_for_database(pose.get_current_pose("right")),
+                }
+            else:
+                value = self._pose_for_database(pose.get_current_pose(kind))
+            success = db.update_positions(kind, name, value)
+        else:
+            raise ValueError(f"未知旧网页坐标命令: {command}")
+        self._publish_legacy("positions_data", {
+            "command": f"{command}_result",
+            "data": {"name": name, "success": bool(success),
+                     "message": "操作成功" if success else "操作失败"},
+        })
+        if command == "update" and success:
+            self._publish_legacy_data()
+
+    def _publish_legacy_map_database(self):
+        self._publish_legacy("map_db_data", {
+            "command": "db_points",
+            "data": self.controllers["db"].get_map_points(),
+        })
+
+    def _handle_legacy_map_database(self, payload):
+        command = payload.get("command")
+        data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+        db = self.controllers["db"]
+        name = data.get("name")
+        if command == "read":
+            self._publish_legacy_map_database()
+            return
+        if command == "update":
+            if not name:
+                raise ValueError("地图点位缺少 name")
+            current = self._find_named(db.get_map_points(), name)
+            if current:
+                success = db.update_map_point(
+                    name, data.get("position", [0, 0, 0]),
+                    data.get("orientation", [0, 0, 0, 1]), data.get("source"))
+            else:
+                success = db.add_map_point(
+                    name, data.get("position", [0, 0, 0]),
+                    data.get("orientation", [0, 0, 0, 1]), data.get("source", "local"))
+            if success:
+                self._publish_legacy_map_database()
+            return
+        if command == "delete":
+            if not db.delete_map_point(name):
+                raise KeyError(f"地图点位不存在: {name}")
+            self._publish_legacy_map_database()
+            return
+        if command == "goto":
+            point = self._find_named(db.get_map_points(), name)
+            if point is None:
+                success, message = False, "点位不存在"
+            else:
+                success = bool(self.controllers["chassis"].point_move(point))
+                message = "已到达" if success else "导航失败"
+            self._publish_legacy("map_db_data", {
+                "command": "goto_result",
+                "data": {"name": name, "success": success, "message": message},
+            })
+            return
+        raise ValueError(f"未知旧网页地图数据库命令: {command}")
+
+    def _handle_legacy_sync(self, payload):
+        command = payload.get("command")
+        sync = self.controllers["sync"]
+        if command == "read":
+            for item in sync.legacy_device_snapshots():
+                self._publish_legacy("modbus_data", item)
+            return
+        if command == "write":
+            data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+            if not sync.set_legacy_value(data):
+                raise KeyError("未找到可写同步点位")
+            for item in sync.legacy_device_snapshots():
+                self._publish_legacy("modbus_data", item)
+            return
+        raise ValueError(f"未知旧网页同步命令: {command}")
+
     def run(self):
         result = agibot_gdk.gdk_init()
         if result != agibot_gdk.GDKRes.kSuccess:
@@ -444,6 +863,7 @@ class ServiceApplication:
             print(f"[服务] serivces2 已启动，MQTT={broker}:{port}")
             self.client.loop_forever()
         finally:
+            self._stop_status_publishers()
             if "sync" in self.controllers:
                 self.controllers["sync"].stop_polling()
             self.motion_executor.shutdown(wait=False, cancel_futures=True)

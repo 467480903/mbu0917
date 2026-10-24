@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>地图与底盘测试</title>
+</head>
+<body>
+  <h1>地图与底盘测试</h1>
+  <p><strong>数据来源：</strong>机器人 GDK（真实 MQTT）</p>
+
+  <fieldset>
+    <legend>MQTT 连接</legend>
+    <label>Broker <input id="broker" value="10.42.1.101"></label>
+    <label>WebSocket 端口 <input id="port" value="9001" size="6"></label>
+    <button id="connect">连接</button>
+    <span id="connection-status">未连接</span>
+  </fieldset>
+
+  <h2>地图数据</h2>
+  <p>
+    <button id="read-all">读取全部</button>
+    <button id="read-map">读取地图</button>
+    <button id="read-laser">读取激光点</button>
+    <button id="read-points">读取地图点位</button>
+    <button id="read-battery">读取电量</button>
+  </p>
+  <p>
+    地图：<span id="map-status">未读取</span>；
+    激光点：<span id="laser-status">未读取</span>；
+    电量：<span id="battery-status">未读取</span>；
+    位置：<span id="pose-status">未读取</span>
+  </p>
+  <p>
+    <label><input id="show-map" type="checkbox" checked> 显示地图</label>
+    <label><input id="show-laser" type="checkbox" checked> 显示激光点</label>
+    <button id="zoom-in" type="button">放大</button>
+    <button id="zoom-out" type="button">缩小</button>
+    <span>缩放：<output id="zoom-status">100%</output></span>
+  </p>
+  <canvas id="map-canvas" width="900" height="520" style="border:1px solid"></canvas>
+
+  <h2>底盘控制</h2>
+  <p>
+    <label>移动距离
+      <input id="move-step" type="range" min="10" max="500" step="10" value="100">
+      <output id="move-step-value">100 mm</output>
+    </label>
+  </p>
+  <p>
+    <button id="move-forward">前进</button>
+    <button id="move-backward">后退</button>
+    <button id="move-left">左移</button>
+    <button id="move-right">右移</button>
+  </p>
+  <p>
+    <label>转动角度
+      <input id="rotate-step" type="range" min="1" max="90" step="1" value="10">
+      <output id="rotate-step-value">10°</output>
+    </label>
+  </p>
+  <p>
+    <button id="rotate-ccw">逆时针</button>
+    <button id="rotate-cw">顺时针</button>
+    <button id="stop">立刻停止</button>
+  </p>
+
+  <h2>点位操作</h2>
+  <p>
+    <label>新点位名称 <input id="point-name" value="playwright_point"></label>
+    <button id="save-current">按当前位置保存</button>
+    <button id="sync-points">同步机器人点位到 SQLite</button>
+  </p>
+  <table border="1">
+    <thead>
+      <tr><th>选择</th><th>名称</th><th>来源</th><th>X</th><th>Y</th><th>Z</th></tr>
+    </thead>
+    <tbody id="point-rows"></tbody>
+  </table>
+  <p><button id="goto-point">到点</button></p>
+
+  <p><strong>操作状态：</strong><span id="operation-status">尚未操作</span></p>
+  <h2>MQTT 日志</h2>
+  <pre id="log"></pre>
+
+  <script src="/vendor/paho-mqtt.min.js"></script>
+  <script type="module" src="./maptest.js"></script>
+</body>
+</html>

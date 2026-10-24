@@ -36,6 +36,10 @@
       "request": "/humanoid/db/request/",
       "response": "/humanoid/db/response/"
     },
+    "maptest": {
+      "request": "/humanoid/maptest/request/",
+      "response": "/humanoid/maptest/response/"
+    },
     "done": "/humanoid/done/"
   },
   "paths": {

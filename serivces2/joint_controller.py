@@ -11,7 +11,10 @@ joint_controller.py — 关节控制器
   - 右手7关节控制（right_arm）
 """
 
+import json
 import math
+import threading
+import time
 
 
 class JointController:
@@ -36,6 +39,9 @@ class JointController:
         self.mqtt_client = mqtt_client
         self.topic_response = topic_response
         self.topic_done = topic_done
+        self.status_topic = "/humanoid/status/data"
+        self._status_stop = threading.Event()
+        self._status_thread = None
         
         # 关节名分组（逻辑顺序：1, 2, 3）
         self.head_joint_keys = [
@@ -113,6 +119,38 @@ class JointController:
         if not angles:
             raise RuntimeError("未读取到关节角")
         return angles
+
+    def publish_status(self):
+        """发布旧 web 所需的关节状态片段。"""
+        payload = {
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "joints": self.get_current_angles(),
+        }
+        self.mqtt_client.publish(
+            self.status_topic, json.dumps(payload, ensure_ascii=False), qos=0)
+        return payload
+
+    def _status_loop(self, interval):
+        while not self._status_stop.is_set():
+            try:
+                self.publish_status()
+            except Exception as error:
+                print(f"[关节状态] 发布失败: {error}")
+            self._status_stop.wait(interval)
+
+    def start_status_publishing(self, interval=0.2):
+        """以指定周期发布关节状态；重复调用不会创建重复线程。"""
+        if self._status_thread and self._status_thread.is_alive():
+            return
+        self._status_stop.clear()
+        self._status_thread = threading.Thread(
+            target=self._status_loop, args=(interval,), daemon=True,
+            name="joint-status")
+        self._status_thread.start()
+        print(f"[关节状态] 发布线程已启动，频率={1.0 / interval:.1f}Hz")
+
+    def stop_status_publishing(self):
+        self._status_stop.set()
     
     # ── 运动控制（不嵌套，直接调用 GDK）────────────────────
     

@@ -138,6 +138,60 @@ class SyncController:
                      "value": i["value"], "isChanged": i["isChanged"]}
                     for i in self._data.values()]
 
+    def legacy_device_snapshots(self):
+        """返回旧 web 所需的 Modbus/S7 分设备数据结构。"""
+        with self._lock:
+            values = {name: item.get("value") for name, item in self._data.items()}
+            devices = list(self._devices)
+        payloads = []
+        for dev in devices:
+            if dev["type"] == "modbus":
+                read = []
+                for index, address in enumerate(dev.get("read_holdings", [])):
+                    names = dev.get("read_names", [])
+                    name = names[index] if index < len(names) else f"modbus_r_{address}"
+                    read.append({"address": address, "name": name, "value": values.get(name)})
+                write = []
+                for index, address in enumerate(dev.get("write_holdings", [])):
+                    names = dev.get("write_names", [])
+                    name = names[index] if index < len(names) else f"modbus_w_{address}"
+                    write.append({"address": address, "name": name, "value": values.get(name)})
+                payloads.append({"command": "modbus_data", "devices": [{
+                    "name": dev.get("name", ""), "ip": dev["ip"],
+                    "port": dev["port"], "read": read, "write": write,
+                }]})
+            else:
+                def s7_rows(items):
+                    return [{"addr": item["addr"], "name": item["name"],
+                             "value": values.get(item["name"])} for item in items]
+                payloads.append({"command": "s7_data", "devices": [{
+                    "name": dev.get("name", ""), "ip": dev["ip"],
+                    "read": s7_rows(dev.get("read_items", [])),
+                    "write": s7_rows(dev.get("write_items", [])),
+                }]})
+        return payloads
+
+    def set_legacy_value(self, data):
+        """把旧 web 的 ip/address 或 name 写命令转成内存点位写入。"""
+        name = data.get("name")
+        if name:
+            return self.set_data(name, data.get("value"))
+        ip, address = data.get("ip"), data.get("address")
+        if ip is None or address is None:
+            return False
+        with self._lock:
+            devices = list(self._devices)
+        for dev in devices:
+            if dev["type"] != "modbus" or dev["ip"] != ip:
+                continue
+            for index, item_address in enumerate(dev.get("write_holdings", [])):
+                if int(item_address) != int(address):
+                    continue
+                names = dev.get("write_names", [])
+                point_name = names[index] if index < len(names) else f"modbus_w_{item_address}"
+                return self.set_data(point_name, data.get("value"))
+        return False
+
     # ═══════════════════════════════════════════════════════════
     #  Modbus TCP（纯 socket，无第三方依赖）
     # ═══════════════════════════════════════════════════════════

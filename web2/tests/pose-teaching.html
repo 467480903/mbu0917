@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>末端位姿与夹爪功能测试</title>
+</head>
+<body>
+  <h1>末端位姿与夹爪功能测试</h1>
+  <p id="mode"></p>
+  <fieldset>
+    <legend>MQTT 连接</legend>
+    <label>Broker <input id="broker"></label>
+    <label>端口 <input id="port" value="9001" size="6"></label>
+    <button id="connect" type="button">连接</button>
+    <span id="connection-status">未连接</span>
+  </fieldset>
+
+  <h2>末端坐标</h2>
+  <p>
+    <label>末端 <select id="side"><option value="left">左手</option><option value="right">右手</option></select></label>
+    <button id="read-pose" type="button">读取当前坐标</button>
+  </p>
+  <table border="1"><tbody id="pose-fields"></tbody></table>
+  <p><label>变量名 <input id="pose-name" placeholder="请输入变量名"></label></p>
+  <p>
+    <button id="move-pose" type="button">运动到目标坐标</button>
+    <button id="save-pose" type="button">创建当前坐标变量</button>
+  </p>
+
+  <h2>夹爪</h2>
+  <p><label>左夹爪 <input id="left-gripper" type="range" min="0" max="1" step="0.1" value="0"></label> <output id="left-value">0.0</output></p>
+  <p><label>右夹爪 <input id="right-gripper" type="range" min="0" max="1" step="0.1" value="0"></label> <output id="right-value">0.0</output></p>
+  <p><button id="move-grippers" type="button">同时控制左右夹爪</button></p>
+  <p><strong>状态：</strong><span id="status">尚未操作</span></p>
+  <h2>MQTT 日志</h2>
+  <pre id="log"></pre>
+  <script src="../vendor/paho-mqtt.min.js"></script>
+  <script type="module" src="./pose-teaching.js"></script>
+</body>
+</html>

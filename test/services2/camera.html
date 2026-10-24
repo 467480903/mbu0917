@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>G2 摄像头集成测试</title>
+</head>
+<body>
+  <h1>G2 摄像头集成测试</h1>
+  <p><strong>数据来源：</strong>机器人 GDK（真实 MQTT）</p>
+  <p>“打开”读取并显示一帧；“关闭”停止页面显示，不销毁服务层共享的 GDK 相机对象。</p>
+
+  <fieldset>
+    <legend>MQTT 连接</legend>
+    <label>Broker <input id="broker" value="10.42.1.101"></label>
+    <label>WebSocket 端口 <input id="port" value="9001" size="6"></label>
+    <button id="connect" type="button">连接</button>
+    <span id="connection-status">未连接</span>
+  </fieldset>
+
+  <p><button id="capture-all" type="button">全部拍照并保存</button></p>
+
+  <fieldset data-camera="kHeadColor">
+    <legend>头部彩色相机</legend>
+    <button id="open-kHeadColor" type="button">打开</button>
+    <button id="close-kHeadColor" type="button">关闭</button>
+    <button id="capture-kHeadColor" type="button">拍照并保存</button>
+    <span id="status-kHeadColor">已关闭</span>
+    <p id="saved-kHeadColor">尚未保存</p>
+    <img id="image-kHeadColor" alt="头部彩色相机画面" width="640" hidden>
+  </fieldset>
+
+  <fieldset data-camera="kHeadDepth">
+    <legend>头部深度相机</legend>
+    <button id="open-kHeadDepth" type="button">打开</button>
+    <button id="close-kHeadDepth" type="button">关闭</button>
+    <button id="capture-kHeadDepth" type="button">拍照并保存</button>
+    <span id="status-kHeadDepth">已关闭</span>
+    <p id="saved-kHeadDepth">尚未保存</p>
+    <img id="image-kHeadDepth" alt="头部深度相机画面" width="640" hidden>
+  </fieldset>
+
+  <fieldset data-camera="kHandLeftColor">
+    <legend>左手彩色相机</legend>
+    <button id="open-kHandLeftColor" type="button">打开</button>
+    <button id="close-kHandLeftColor" type="button">关闭</button>
+    <button id="capture-kHandLeftColor" type="button">拍照并保存</button>
+    <span id="status-kHandLeftColor">已关闭</span>
+    <p id="saved-kHandLeftColor">尚未保存</p>
+    <img id="image-kHandLeftColor" alt="左手彩色相机画面" width="640" hidden>
+  </fieldset>
+
+  <fieldset data-camera="kHandRightColor">
+    <legend>右手彩色相机</legend>
+    <button id="open-kHandRightColor" type="button">打开</button>
+    <button id="close-kHandRightColor" type="button">关闭</button>
+    <button id="capture-kHandRightColor" type="button">拍照并保存</button>
+    <span id="status-kHandRightColor">已关闭</span>
+    <p id="saved-kHandRightColor">尚未保存</p>
+    <img id="image-kHandRightColor" alt="右手彩色相机画面" width="640" hidden>
+  </fieldset>
+
+  <p><strong>操作状态：</strong><span id="operation-status">尚未操作</span></p>
+  <h2>MQTT 日志</h2>
+  <pre id="log"></pre>
+
+  <script src="/vendor/paho-mqtt.min.js"></script>
+  <script type="module" src="./camera.js"></script>
+</body>
+</html>

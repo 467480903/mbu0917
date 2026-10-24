@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Three.js / URDF 功能测试</title>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "/legacy/libs/three.module.js",
+        "three/addons/": "/legacy/libs/three_addons/",
+        "three/examples/jsm/": "/legacy/libs/three_addons/",
+        "urdf-loader": "/legacy/libs/urdf-loader.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <h1>Three.js / URDF 功能测试</h1>
+  <p>读取 <code>/web/meshes/model.urdf</code>。在画布中拖动鼠标可旋转，滚轮可缩放。</p>
+  <button id="load" type="button">读取机器人模型</button>
+  <button id="reset" type="button">恢复视角</button>
+  <p id="status">尚未读取</p>
+  <div id="viewer" style="width: 900px; max-width: 100%; height: 600px; border: 1px solid black;"></div>
+  <script type="module" src="./urdf.js"></script>
+</body>
+</html>

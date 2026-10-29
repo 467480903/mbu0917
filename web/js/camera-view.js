@@ -15,11 +15,11 @@ export default {
         </div>
         <div class="cv-bar">
             <div class="cv-bar-left">
-                <button class="cv-btn cv-btn-on" :class="{active: streaming}" @click="startStream" :disabled="streaming">开启</button>
-                <button class="cv-btn cv-btn-off" :class="{active: !streaming}" @click="stopStream" :disabled="!streaming">关闭</button>
-                <button class="cv-btn cv-btn-save" @click="saveImage">拍摄</button>
-                <button v-if="!continuousCapturing" class="cv-btn cv-btn-continuous-start" @click="startContinuousCapture">持续拍照</button>
-                <button v-else class="cv-btn cv-btn-continuous-stop" @click="stopContinuousCapture">停止连拍</button>
+                <button class="cv-btn cv-btn-on" :class="{active: streaming}" @click="startStream" :disabled="streaming"><ui-icon name="power"></ui-icon>开启</button>
+                <button class="cv-btn cv-btn-off" :class="{active: !streaming}" @click="stopStream" :disabled="!streaming"><ui-icon name="stop"></ui-icon>关闭</button>
+                <button class="cv-btn cv-btn-save" @click="saveImage"><ui-icon name="camera"></ui-icon>拍摄</button>
+                <button v-if="!continuousCapturing" class="cv-btn cv-btn-continuous-start" @click="startContinuousCapture"><ui-icon name="repeat"></ui-icon>持续拍照</button>
+                <button v-else class="cv-btn cv-btn-continuous-stop" @click="stopContinuousCapture"><ui-icon name="stop"></ui-icon>停止连拍</button>
             </div>
             <div class="cv-bar-center">
                 <span v-if="continuousCapturing" class="cv-status cv-status-capturing">● 连拍中 (0.5s/张)</span>

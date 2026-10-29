@@ -5,6 +5,7 @@
 import json
 import math
 import os
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -52,7 +53,10 @@ class ServiceApplication:
             "map_db_data": "/humanoid/map/db_data",
             "modbus_control": "/humanoid/modbus/control",
             "modbus_data": "/humanoid/modbus/data",
+            "emergency_control": "/humanoid/emergency/control",
+            "emergency_status": "/humanoid/emergency/status",
         }
+        self._emergency_pressed = threading.Event()
         self._status_publishers_started = False
         self.motion_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="motion")
         self.io_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="service")
@@ -164,10 +168,12 @@ class ServiceApplication:
             self.legacy_topics["positions_control"],
             self.legacy_topics["map_db_control"],
             self.legacy_topics["modbus_control"],
+            self.legacy_topics["emergency_control"],
         ])
         for topic in request_topics:
             client.subscribe(topic, qos=2)
             print(f"[MQTT] 已订阅 {topic}")
+        self._publish_emergency_status()
         self.controllers["sync"].start_polling()
         self._start_status_publishers()
 
@@ -178,6 +184,15 @@ class ServiceApplication:
                 raise ValueError("报文必须是 JSON 对象")
         except Exception as exc:
             print(f"[MQTT] 无法解析 {message.topic}: {exc}")
+            return
+        if message.topic == self.legacy_topics["emergency_control"]:
+            action = payload.get("action", payload.get("command"))
+            if action in {"press", "pressed"}:
+                # 先同步置位状态，立即拦截后续运动命令。
+                self._emergency_pressed.set()
+            elif action in {"release", "released"}:
+                self._emergency_pressed.clear()
+            self.io_executor.submit(self._dispatch_safely, message.topic, payload)
             return
         motion_topics = {
             self.topics[name]["request"] for name in ("base", "joint", "pose", "ee")
@@ -194,6 +209,9 @@ class ServiceApplication:
             "moveJoint", "movePosition", "moveMapPoint"
         }:
             motion_topics.add(message.topic)
+        if message.topic in motion_topics and self._emergency_pressed.is_set():
+            self.io_executor.submit(self._reject_motion_while_emergency, message.topic, payload)
+            return
         is_emergency_stop = (
             message.topic == self.topics["base"]["request"]
             and payload.get("cmd") == "stop"
@@ -233,11 +251,53 @@ class ServiceApplication:
             self.legacy_topics["positions_control"]: self._handle_legacy_position,
             self.legacy_topics["map_db_control"]: self._handle_legacy_map_database,
             self.legacy_topics["modbus_control"]: self._handle_legacy_sync,
+            self.legacy_topics["emergency_control"]: self._handle_emergency,
         }
         handler = routes.get(topic)
         if handler is None:
             raise ValueError(f"未知主题: {topic}")
         handler(payload)
+
+    def _publish_emergency_status(self, success=True, error=None):
+        """发布可保留的急停状态，新打开的网页也能立即同步。"""
+        message = {
+            "state": "pressed" if self._emergency_pressed.is_set() else "released",
+            "pressed": self._emergency_pressed.is_set(),
+            "success": success,
+            "time": int(time.time() * 1000),
+        }
+        if error:
+            message["error"] = str(error)
+        self.client.publish(
+            self.legacy_topics["emergency_status"],
+            json.dumps(message, ensure_ascii=False), qos=2, retain=True)
+
+    def _reject_motion_while_emergency(self, topic, payload):
+        error = RuntimeError("急停已按下，运动命令已拒绝")
+        print(f"[急停] 拒绝运动命令: {topic} {payload}")
+        self._publish_failure(topic, payload, error)
+
+    def _handle_emergency(self, payload):
+        action = payload.get("action", payload.get("command"))
+        if action in {"press", "pressed"}:
+            errors = []
+            print("[急停] 已按下，立即停止底盘并保持上肢当前位置")
+            try:
+                self.controllers["chassis"].set_emergency_stop(True)
+            except Exception as exc:
+                errors.append(f"底盘: {exc}")
+            try:
+                self.controllers["joint"].emergency_stop()
+            except Exception as exc:
+                errors.append(f"上肢: {exc}")
+            self._publish_emergency_status(not errors, "; ".join(errors) if errors else None)
+            return
+        if action in {"release", "released"}:
+            self.controllers["chassis"].set_emergency_stop(False)
+            print("[急停] 已松开，恢复接收运动命令")
+            self._publish_emergency_status()
+            return
+        raise ValueError(f"未知急停命令: {action}")
 
     def _publish_failure(self, topic, payload, exc):
         motion_groups = {
@@ -408,21 +468,19 @@ class ServiceApplication:
             raise KeyError(f"关节变量不存在: {payload.get('name')}")
         controller = self.controllers["joint"]
         value, speed, kind = item["value"], payload.get("speed"), item["type"]
-        if kind == "head":
-            joints = [value.get(key, 0.0) for key in controller.head_joint_keys]
-            return controller.move_head(joints, speed)
-        if kind == "waist":
-            joints = [value.get(key, 0.0) for key in controller.waist_joint_keys]
-            return controller.move_waist(joints, speed)
-        if kind in ("left", "left_arm"):
+        if kind == "single_joint":
+            joint_name = item.get("joint_name")
+            return controller.move_single_joint(
+                joint_name, value=value.get(joint_name), speed=speed)
+        if kind == "left_arm":
             joints = [value.get(key, 0.0) for key in controller.left_arm_joint_keys]
             return controller.move_left_arm(joints, speed)
-        if kind in ("right", "right_arm"):
+        if kind == "right_arm":
             joints = [value.get(key, 0.0) for key in controller.right_arm_joint_keys]
             return controller.move_right_arm(joints, speed)
-        if kind == "arms":
-            return controller.move_arms(value, speed)
-        return controller.move_wbc(value, speed)
+        if kind == "whole_body":
+            return controller.move_wbc(value, speed)
+        raise ValueError(f"未知关节变量类型: {kind}")
 
     def _move_stored_position(self, payload):
         expected_type = payload.get("type")
@@ -451,8 +509,10 @@ class ServiceApplication:
         cmd = payload.get("cmd")
         db = self.controllers["db"]
         simple = {
-            "addJoint": lambda: db.add_joints(payload["type"], payload["name"], payload["value"]),
-            "updateJoint": lambda: db.update_joints(payload["type"], payload["name"], payload["value"]),
+            "addJoint": lambda: db.add_joints(
+                payload["type"], payload["name"], payload["value"], payload.get("joint_name")),
+            "updateJoint": lambda: db.update_joints(
+                payload["type"], payload["name"], payload["value"], payload.get("joint_name")),
             "deleteJoint": lambda: db.delete_joints(payload["type"], payload["name"]),
             "getJoints": db.get_joints,
             "addPosition": lambda: db.add_positions(payload["type"], payload["name"], payload["value"]),
@@ -727,9 +787,10 @@ class ServiceApplication:
         category = payload.get("category", "joints")
         kind = payload.get("type", "WBC")
         name = payload.get("name", "unnamed")
+        joint_name = payload.get("joint_name")
         data = payload.get("data", {})
         if command == "save_joints":
-            success = db.add_joints(kind, name, data)
+            success = db.add_joints(kind, name, data, joint_name)
         elif command == "save_position":
             success = db.add_positions(kind, name, data)
         elif command == "read":
@@ -738,7 +799,7 @@ class ServiceApplication:
         elif command == "update" and category == "positions":
             success = db.update_positions(kind, name, data)
         elif command == "update":
-            success = db.update_joints(kind, name, data)
+            success = db.update_joints(kind, name, data, joint_name)
         elif command == "delete" and category == "positions":
             success = db.delete_positions(kind, name)
         elif command == "delete":

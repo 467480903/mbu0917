@@ -8,8 +8,6 @@ export default {
     inject: ['getUrdfViewer', 'getRobotStatus'],
     template: `
     <div class="panel tj-panel">
-        <h5 class="tj-title">示教（角） · 关节角度</h5>
-
         <div class="tj-content">
         <div class="teach-grid">
             <!-- 头部 -->
@@ -17,9 +15,9 @@ export default {
                 <div class="group-title"><span class="group-icon">◉</span> 头部</div>
                 <div class="joint-row" v-for="j in headJoints" :key="j.name">
                     <span class="j-label">{{ j.label }}</span>
-                    <button class="j-btn minus" @mousedown="startStep(j,-1)" @mouseup="stopStep" @mouseleave="stopStep">−</button>
+                    <button class="j-btn minus" aria-label="减小" @mousedown="startStep(j,-1)" @mouseup="stopStep" @mouseleave="stopStep"><ui-icon name="minus"></ui-icon></button>
                     <span class="j-angle">{{ format(j.value) }}°</span>
-                    <button class="j-btn plus"  @mousedown="startStep(j, 1)" @mouseup="stopStep" @mouseleave="stopStep">+</button>
+                    <button class="j-btn plus" aria-label="增加" @mousedown="startStep(j, 1)" @mouseup="stopStep" @mouseleave="stopStep"><ui-icon name="plus"></ui-icon></button>
                 </div>
             </div>
 
@@ -28,9 +26,9 @@ export default {
                 <div class="group-title"><span class="group-icon">◆</span> 腰部</div>
                 <div class="joint-row" v-for="j in waistJoints" :key="j.name">
                     <span class="j-label">{{ j.label }}</span>
-                    <button class="j-btn minus" @mousedown="startStep(j,-1)" @mouseup="stopStep" @mouseleave="stopStep">−</button>
+                    <button class="j-btn minus" aria-label="减小" @mousedown="startStep(j,-1)" @mouseup="stopStep" @mouseleave="stopStep"><ui-icon name="minus"></ui-icon></button>
                     <span class="j-angle">{{ format(j.value) }}°</span>
-                    <button class="j-btn plus"  @mousedown="startStep(j, 1)" @mouseup="stopStep" @mouseleave="stopStep">+</button>
+                    <button class="j-btn plus" aria-label="增加" @mousedown="startStep(j, 1)" @mouseup="stopStep" @mouseleave="stopStep"><ui-icon name="plus"></ui-icon></button>
                 </div>
             </div>
 
@@ -39,9 +37,9 @@ export default {
                 <div class="group-title"><span class="group-icon">▼</span> 腿部</div>
                 <div class="joint-row" v-for="j in legJoints" :key="j.name">
                     <span class="j-label">{{ j.label }}</span>
-                    <button class="j-btn minus" @mousedown="startStep(j,-1)" @mouseup="stopStep" @mouseleave="stopStep">−</button>
+                    <button class="j-btn minus" aria-label="减小" @mousedown="startStep(j,-1)" @mouseup="stopStep" @mouseleave="stopStep"><ui-icon name="minus"></ui-icon></button>
                     <span class="j-angle">{{ format(j.value) }}°</span>
-                    <button class="j-btn plus"  @mousedown="startStep(j, 1)" @mouseup="stopStep" @mouseleave="stopStep">+</button>
+                    <button class="j-btn plus" aria-label="增加" @mousedown="startStep(j, 1)" @mouseup="stopStep" @mouseleave="stopStep"><ui-icon name="plus"></ui-icon></button>
                 </div>
             </div>
 
@@ -50,9 +48,9 @@ export default {
                 <div class="group-title group-title-left"><span class="group-icon">◀</span> 左臂</div>
                 <div class="joint-row" v-for="j in leftArmJoints" :key="j.name">
                     <span class="j-label j-label-num">{{ j.label }}</span>
-                    <button class="j-btn minus" @mousedown="startStep(j,-1)" @mouseup="stopStep" @mouseleave="stopStep">−</button>
+                    <button class="j-btn minus" aria-label="减小" @mousedown="startStep(j,-1)" @mouseup="stopStep" @mouseleave="stopStep"><ui-icon name="minus"></ui-icon></button>
                     <span class="j-angle">{{ format(j.value) }}°</span>
-                    <button class="j-btn plus"  @mousedown="startStep(j, 1)" @mouseup="stopStep" @mouseleave="stopStep">+</button>
+                    <button class="j-btn plus" aria-label="增加" @mousedown="startStep(j, 1)" @mouseup="stopStep" @mouseleave="stopStep"><ui-icon name="plus"></ui-icon></button>
                 </div>
             </div>
 
@@ -61,9 +59,9 @@ export default {
                 <div class="group-title group-title-right"><span class="group-icon">▶</span> 右臂</div>
                 <div class="joint-row" v-for="j in rightArmJoints" :key="j.name">
                     <span class="j-label j-label-num">{{ j.label }}</span>
-                    <button class="j-btn minus" @mousedown="startStep(j,-1)" @mouseup="stopStep" @mouseleave="stopStep">−</button>
+                    <button class="j-btn minus" aria-label="减小" @mousedown="startStep(j,-1)" @mouseup="stopStep" @mouseleave="stopStep"><ui-icon name="minus"></ui-icon></button>
                     <span class="j-angle">{{ format(j.value) }}°</span>
-                    <button class="j-btn plus"  @mousedown="startStep(j, 1)" @mouseup="stopStep" @mouseleave="stopStep">+</button>
+                    <button class="j-btn plus" aria-label="增加" @mousedown="startStep(j, 1)" @mouseup="stopStep" @mouseleave="stopStep"><ui-icon name="plus"></ui-icon></button>
                 </div>
             </div>
         </div>
@@ -73,7 +71,7 @@ export default {
         <div class="tj-actionbar">
             <div class="tj-actions">
                 <button class="djc-btn djc-btn-read" @click="showSaveDialog = true">
-                    <span style="margin-right:4px;">💾</span> 保存
+                    <ui-icon name="save"></ui-icon>保存
                 </button>
             </div>
             <div class="tj-info">
@@ -103,15 +101,25 @@ export default {
                 <div style="margin-bottom:16px;">
                     <label style="display:block; color:#606266; font-size:14px; margin-bottom:8px;">类型</label>
                     <div class="radio-group">
-                        <label v-for="t in saveTypes" :key="t">
-                            <input type="radio" :value="t" v-model="saveType" /> {{ t }}
+                        <label v-for="t in saveTypes" :key="t.value">
+                            <input type="radio" :value="t.value" v-model="saveType" /> {{ t.label }}
                         </label>
                     </div>
                 </div>
 
+                <div v-if="saveType === 'single_joint'" class="form-row">
+                    <label>关节轴</label>
+                    <select v-model="selectedJoint" class="save-joint-select">
+                        <option v-for="joint in allJointOptions" :key="joint.name" :value="joint.name">
+                            {{ joint.group }} · {{ joint.label }}（{{ joint.name }}）
+                        </option>
+                    </select>
+                </div>
+
                 <div class="step-actions">
-                    <button class="nav-btn" @click="showSaveDialog = false">取消</button>
-                    <button class="nav-btn start-btn" @click="doSave" :disabled="!saveName">保存</button>
+                    <button class="nav-btn" @click="showSaveDialog = false"><ui-icon name="x"></ui-icon>取消</button>
+                    <button class="nav-btn start-btn" @click="doSave"
+                            :disabled="!saveName || (saveType === 'single_joint' && !selectedJoint)"><ui-icon name="save"></ui-icon>保存</button>
                 </div>
             </div>
         </div>
@@ -122,8 +130,14 @@ export default {
             stepSize: 1.0,
             showSaveDialog: false,
             saveName: '',
-            saveType: 'WBC',
-            saveTypes: ['WBC', 'arms', 'left', 'right', 'head', 'waist'],
+            saveType: 'whole_body',
+            selectedJoint: 'idx11_head_joint1',
+            saveTypes: [
+                { value: 'whole_body', label: '全身22关节' },
+                { value: 'left_arm', label: '左手7关节' },
+                { value: 'right_arm', label: '右手7关节' },
+                { value: 'single_joint', label: '单轴' },
+            ],
             _repeatTimer: null,
             _repeatInterval: null,
             headJoints: [
@@ -160,6 +174,20 @@ export default {
             ],
             _unwatch: null
         };
+    },
+    computed: {
+        allJointOptions() {
+            const groups = [
+                ['头部', this.headJoints],
+                ['腰部', this.waistJoints],
+                ['腿部', this.legJoints],
+                ['左手', this.leftArmJoints],
+                ['右手', this.rightArmJoints],
+            ];
+            return groups.flatMap(([group, joints]) =>
+                joints.map(joint => ({ ...joint, group }))
+            );
+        }
     },
     methods: {
         step(j, dir) {
@@ -204,27 +232,33 @@ export default {
         doSave() {
             if (!this.saveName) return;
             const typeGroups = {
-                WBC:   [this.headJoints, this.leftArmJoints, this.rightArmJoints, this.waistJoints, this.legJoints],
-                arms:  [this.leftArmJoints, this.rightArmJoints],
-                left:  [this.leftArmJoints],
-                right: [this.rightArmJoints],
-                head:  [this.headJoints],
-                waist: [this.waistJoints, this.legJoints],
+                whole_body: [this.headJoints, this.leftArmJoints, this.rightArmJoints, this.waistJoints, this.legJoints],
+                left_arm: [this.leftArmJoints],
+                right_arm: [this.rightArmJoints],
             };
-            const groups = typeGroups[this.saveType] || typeGroups.WBC;
             const joints = {};
-            groups.forEach(group => {
-                group.forEach(joint => {
-                    joints[joint.name] = joint.value * Math.PI / 180;
+            let jointName = null;
+            if (this.saveType === 'single_joint') {
+                const joint = this.allJointOptions.find(item => item.name === this.selectedJoint);
+                if (!joint) return;
+                jointName = joint.name;
+                joints[joint.name] = joint.value * Math.PI / 180;
+            } else {
+                const groups = typeGroups[this.saveType] || typeGroups.whole_body;
+                groups.forEach(group => {
+                    group.forEach(joint => {
+                        joints[joint.name] = joint.value * Math.PI / 180;
+                    });
                 });
-            });
+            }
             mqttClient.publishDataSave({
                 command: 'save_joints',
                 type: this.saveType,
                 name: this.saveName,
+                joint_name: jointName,
                 data: joints
             });
-            console.log(`[保存] type=${this.saveType}, name=${this.saveName}, joints=${Object.keys(joints).length}`);
+            console.log(`[保存] type=${this.saveType}, name=${this.saveName}, joint=${jointName || '-'}, joints=${Object.keys(joints).length}`);
             this.showSaveDialog = false;
             this.saveName = '';
         }

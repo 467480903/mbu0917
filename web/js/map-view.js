@@ -15,13 +15,13 @@ export default {
         <!-- 右下角建图操作按钮 -->
         <div class="map-action-btns">
             <button :class="['map-btn', 'map-btn-start', isMapping ? 'map-btn-active' : '']" @click="confirmStartMapping" :disabled="isMapping">
-                ▶ 开始扫图
+                <ui-icon name="play"></ui-icon>开始扫图
             </button>
             <button :class="['map-btn', 'map-btn-stop']" @click="confirmStopMapping" :disabled="!isMapping">
-                ■ 结束扫图
+                <ui-icon name="stop"></ui-icon>结束扫图
             </button>
             <button :class="['map-btn', 'map-btn-save']" @click="confirmSaveMap" :disabled="!isMapping">
-                💾 保存地图
+                <ui-icon name="save"></ui-icon>保存地图
             </button>
             <span class="map-mapping-status" v-if="isMapping">🔴 建图中...</span>
         </div>
@@ -51,8 +51,8 @@ export default {
                     {{ confirmDialog.message }}
                 </div>
                 <div class="step-actions">
-                    <button class="nav-btn" @click="confirmDialog.visible = false">取消</button>
-                    <button class="nav-btn" :style="{background: confirmDialog.color, color:'#fff'}" @click="executeConfirm">确定</button>
+                    <button class="nav-btn" @click="confirmDialog.visible = false"><ui-icon name="x"></ui-icon>取消</button>
+                    <button class="nav-btn" :style="{background: confirmDialog.color, color:'#fff'}" @click="executeConfirm"><ui-icon name="check"></ui-icon>确定</button>
                 </div>
             </div>
         </div>

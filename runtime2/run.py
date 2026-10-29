@@ -22,6 +22,17 @@ STEP_TOPIC = "/humanoid/programs/step"
 CODES_TOPIC = "/humanoid/programs/codes"
 FILES_TOPIC = "/humanoid/programs/files"
 STATUS_TOPIC = "/humanoid/programs/status"
+FILE_CONTENT_TOPIC = "/humanoid/programs/file_content"
+UPLOAD_RESULT_TOPIC = "/humanoid/programs/upload_result"
+DELETE_RESULT_TOPIC = "/humanoid/programs/delete_result"
+
+# runtime2 根目录中属于运行框架的 Python 文件，不向用户程序列表暴露。
+INTERNAL_PYTHON_FILES = frozenset({
+    "__init__.py",
+    "main.py",
+    "minth.py",
+    "run.py",
+})
 
 
 class StopExecution(Exception):
@@ -33,10 +44,8 @@ class RuntimeProgramManager:
 
     def __init__(self, runtime_dir=None, publisher=None):
         self.runtime_dir = Path(runtime_dir or Path(__file__).resolve().parent).resolve()
-        self.programs_dir = self.runtime_dir / "programs"
         self.main_file = self.runtime_dir / "main.py"
         self.publisher = publisher or (lambda topic, payload: None)
-        self.programs_dir.mkdir(parents=True, exist_ok=True)
         self._state_lock = threading.Lock()
         self._step_event = threading.Event()
         self._stop_event = threading.Event()
@@ -56,9 +65,12 @@ class RuntimeProgramManager:
             return self._debugging
 
     def list_programs(self):
+        """列出 runtime2 根目录中的用户 Python 程序。"""
         return sorted(
-            path.name for path in self.programs_dir.iterdir()
-            if path.is_file() and path.suffix == ".py" and path.name != "__init__.py"
+            path.name for path in self.runtime_dir.iterdir()
+            if path.is_file()
+            and path.suffix.lower() == ".py"
+            and path.name not in INTERNAL_PYTHON_FILES
         )
 
     def publish_programs(self):
@@ -66,27 +78,72 @@ class RuntimeProgramManager:
         self.publisher(FILES_TOPIC, {"command": "read_files", "success": True, "files": files})
         return files
 
-    def _program_path(self, filename):
-        """校验程序文件名，禁止绝对路径和目录穿越。"""
-        if not isinstance(filename, str) or not filename.endswith(".py"):
+    def _program_target(self, filename):
+        """校验程序文件名并返回 runtime2 根目录中的目标路径。"""
+        if not isinstance(filename, str) or not filename.lower().endswith(".py"):
             raise ValueError("程序必须是 .py 文件")
-        if Path(filename).name != filename or filename == "__init__.py":
+        if Path(filename).name != filename or filename in INTERNAL_PYTHON_FILES:
             raise ValueError("程序文件名不合法")
-        path = (self.programs_dir / filename).resolve()
-        if path.parent != self.programs_dir or not path.is_file():
+        path = (self.runtime_dir / filename).resolve()
+        if path.parent != self.runtime_dir:
+            raise ValueError("程序文件名不合法")
+        return path
+
+    def _program_path(self, filename):
+        """返回已经存在的用户程序路径。"""
+        path = self._program_target(filename)
+        if not path.is_file():
             raise FileNotFoundError(f"程序不存在: {filename}")
         return path
 
+    def read_program(self, filename):
+        """读取用户程序并发布给网页编辑器或下载功能。"""
+        source = self._program_path(filename)
+        code = source.read_text(encoding="utf-8")
+        self.publisher(FILE_CONTENT_TOPIC, {
+            "command": "read_file", "success": True,
+            "filename": source.name, "code": code,
+        })
+        return code
+
+    def upload_program(self, filename, content):
+        """新增或保存用户程序，使用同目录临时文件原子替换。"""
+        target = self._program_target(filename)
+        if not isinstance(content, str):
+            raise ValueError("程序内容必须是文本")
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=self.runtime_dir,
+            prefix=f".{target.stem}-", suffix=".py", delete=False,
+        ) as stream:
+            stream.write(content)
+            temporary_name = stream.name
+        os.replace(temporary_name, target)
+        self.publisher(UPLOAD_RESULT_TOPIC, {
+            "command": "upload", "success": True, "filename": target.name,
+        })
+        return target
+
+    def delete_program(self, filename):
+        """删除指定用户程序；框架文件由文件名校验保护。"""
+        target = self._program_path(filename)
+        target.unlink()
+        self.publisher(DELETE_RESULT_TOPIC, {
+            "command": "delete", "success": True, "filename": target.name,
+        })
+        return target
+
     def copy_program(self, filename):
-        """将选中程序原样复制为 runtime2/main.py。"""
+        """将选中程序复制为 main.py，并在首行记录原始文件名。"""
         if self.running:
             raise RuntimeError("程序运行中，不能替换 main.py")
         source = self._program_path(filename)
         content = source.read_text(encoding="utf-8")
+        source_comment = f"# 本文件内容复制自用户程序：{source.name}\n"
         with tempfile.NamedTemporaryFile(
             mode="w", encoding="utf-8", dir=self.runtime_dir,
             prefix=".main-", suffix=".py", delete=False,
         ) as stream:
+            stream.write(source_comment)
             stream.write(content)
             temporary_name = stream.name
         os.replace(temporary_name, self.main_file)
@@ -234,11 +291,20 @@ class RuntimeDebugService:
     def _publish(self, topic, payload):
         self.client.publish(topic, json.dumps(payload, ensure_ascii=False), qos=2)
 
-    def _publish_error(self, command, error):
-        self._publish(STATUS_TOPIC, {
+    def _publish_error(self, command, error, data=None):
+        result_topic = {
+            "read_file": FILE_CONTENT_TOPIC,
+            "upload": UPLOAD_RESULT_TOPIC,
+            "delete": DELETE_RESULT_TOPIC,
+        }.get(command, STATUS_TOPIC)
+        filename = data.get("filename") if isinstance(data, dict) else data
+        payload = {
             "command": command, "state": "error", "success": False,
             "error": str(error),
-        })
+        }
+        if isinstance(filename, str):
+            payload["filename"] = filename
+        self._publish(result_topic, payload)
 
     def _on_connect(self, client, userdata, flags, reason_code, properties=None):
         failed = reason_code.is_failure if hasattr(reason_code, "is_failure") else reason_code != 0
@@ -257,7 +323,7 @@ class RuntimeDebugService:
         except Exception as error:
             command = locals().get("command") or "unknown"
             print(f"[runtime2] {command} 失败: {error}")
-            self._publish_error(command, error)
+            self._publish_error(command, error, locals().get("data"))
 
     def _dispatch(self, command, data=None):
         if command in ("read_files", "read_program_files"):
@@ -265,6 +331,18 @@ class RuntimeDebugService:
         elif command == "copy":
             filename = data.get("filename") if isinstance(data, dict) else data
             self.manager.copy_program(filename)
+        elif command == "read_file":
+            filename = data.get("filename") if isinstance(data, dict) else data
+            self.manager.read_program(filename)
+        elif command == "upload":
+            if not isinstance(data, dict):
+                raise ValueError("upload 命令缺少 filename 和 content")
+            self.manager.upload_program(data.get("filename"), data.get("content"))
+            self.manager.publish_programs()
+        elif command == "delete":
+            filename = data.get("filename") if isinstance(data, dict) else data
+            self.manager.delete_program(filename)
+            self.manager.publish_programs()
         elif command == "codes":
             self.manager.publish_main()
         elif command == "run":
@@ -281,7 +359,7 @@ class RuntimeDebugService:
     def run(self):
         self.client.connect(self.broker, self.port, 60)
         print(f"[runtime2] 程序调试服务已启动，MQTT={self.broker}:{self.port}")
-        print(f"[runtime2] programs={self.manager.programs_dir}")
+        print(f"[runtime2] 用户程序目录={self.manager.runtime_dir}")
         self.client.loop_forever()
 
 

@@ -10,38 +10,16 @@ export default {
     inject: ['getRobotStatus'],
     template: `
     <div class="panel tc-panel">
-        <h5 class="tc-title">示教（坐标） · 末端位姿</h5>
-
         <div class="tc-content">
-        <!-- 坐标系选择 -->
-        <div class="tc-coord-sys-bar">
-            <div class="coord-sys-row">
-                <label class="coord-sys-label">左手坐标系</label>
-                <select v-model="leftFrame" class="coord-sys-select">
-                    <option value="base">base</option>
-                    <option value="ltool0">ltool0</option>
-                    <option value="lobj0">lobj0</option>
-                </select>
-            </div>
-            <div class="coord-sys-row">
-                <label class="coord-sys-label">右手坐标系</label>
-                <select v-model="rightFrame" class="coord-sys-select">
-                    <option value="base">base</option>
-                    <option value="rtool0">rtool0</option>
-                    <option value="robj0">robj0</option>
-                </select>
-            </div>
-        </div>
-
         <div class="tc-hands-wrap">
             <!-- 左手 -->
             <div class="tc-hand-group tc-hand-left">
                 <h6 class="tc-hand-title">左手</h6>
                 <div class="coord-row" v-for="ax in axes" :key="'L_'+ax">
                     <span class="axis-label">{{ ax.toUpperCase() }}</span>
-                    <button class="minus" @click="step('left', ax, -stepFor(ax))">−</button>
+                    <button class="minus" aria-label="减小" @click="step('left', ax, -stepFor(ax))"><ui-icon name="minus"></ui-icon></button>
                     <span class="val">{{ format(left[ax]) }}</span>
-                    <button class="plus"  @click="step('left', ax,  stepFor(ax))">+</button>
+                    <button class="plus" aria-label="增加" @click="step('left', ax,  stepFor(ax))"><ui-icon name="plus"></ui-icon></button>
                 </div>
                 <!-- 左手夹爪 -->
                 <div class="gripper-row">
@@ -64,9 +42,9 @@ export default {
                 <h6 class="tc-hand-title">右手</h6>
                 <div class="coord-row" v-for="ax in axes" :key="'R_'+ax">
                     <span class="axis-label">{{ ax.toUpperCase() }}</span>
-                    <button class="minus" @click="step('right', ax, -stepFor(ax))">−</button>
+                    <button class="minus" aria-label="减小" @click="step('right', ax, -stepFor(ax))"><ui-icon name="minus"></ui-icon></button>
                     <span class="val">{{ format(right[ax]) }}</span>
-                    <button class="plus"  @click="step('right', ax,  stepFor(ax))">+</button>
+                    <button class="plus" aria-label="增加" @click="step('right', ax,  stepFor(ax))"><ui-icon name="plus"></ui-icon></button>
                 </div>
                 <!-- 右手夹爪 -->
                 <div class="gripper-row">
@@ -90,8 +68,26 @@ export default {
         <div class="tc-actionbar">
             <div class="tc-actions">
                 <button class="djc-btn djc-btn-read" @click="showSaveDialog = true">
-                    <span style="margin-right:4px;">💾</span> 保存
+                    <ui-icon name="save"></ui-icon>保存
                 </button>
+                <div class="tc-frame-controls">
+                    <div class="coord-sys-row">
+                        <label class="coord-sys-label">左手坐标系</label>
+                        <select v-model="leftFrame" class="coord-sys-select">
+                            <option value="base">base</option>
+                            <option value="ltool0">ltool0</option>
+                            <option value="lobj0">lobj0</option>
+                        </select>
+                    </div>
+                    <div class="coord-sys-row">
+                        <label class="coord-sys-label">右手坐标系</label>
+                        <select v-model="rightFrame" class="coord-sys-select">
+                            <option value="base">base</option>
+                            <option value="rtool0">rtool0</option>
+                            <option value="robj0">robj0</option>
+                        </select>
+                    </div>
+                </div>
             </div>
             <div class="tc-info">
                 <span class="tc-info-item">
@@ -132,8 +128,8 @@ export default {
                 </div>
 
                 <div class="step-actions">
-                    <button class="nav-btn" @click="showSaveDialog = false">取消</button>
-                    <button class="nav-btn start-btn" @click="doSave" :disabled="!saveName">保存</button>
+                    <button class="nav-btn" @click="showSaveDialog = false"><ui-icon name="x"></ui-icon>取消</button>
+                    <button class="nav-btn start-btn" @click="doSave" :disabled="!saveName"><ui-icon name="save"></ui-icon>保存</button>
                 </div>
             </div>
         </div>

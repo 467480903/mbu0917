@@ -13,7 +13,7 @@
 从项目根目录运行：
 
 ```bash
-python3 runtime2/programs/demo.py
+python3 runtime2/demo.py
 ```
 
 示例：
@@ -72,6 +72,25 @@ python3 test/runtime2/test_12_tts.py
 
 每个测试文件直接创建 `G2` 并调用一个中文接口，不再使用模拟 MQTT，也不包含交互式确认；不要用 `unittest discover` 批量执行这些脚本。
 
+## 用户程序目录
+
+用户程序与运行框架统一放在 `runtime2/` 目录中，不再使用
+`runtime2/programs/` 子目录。程序文件管理页面会遍历 `runtime2/` 下的
+`.py` 文件，并自动隐藏以下框架文件：
+
+- `__init__.py`：Python 包入口。
+- `main.py`：当前待运行程序。
+- `minth.py`：G2 中文用户 API。
+- `run.py`：程序管理与单步调试服务。
+
+因此默认可选择的用户程序为：
+
+- `debug_demo.py`
+- `demo.py`
+- `long_action_test.py`
+
+新增用户程序时，直接把 `.py` 文件放入 `/data/wxf/mbu0917/runtime2/`。
+
 ## 用户程序管理与单步调试
 
 启动独立的程序管理服务：
@@ -81,19 +100,50 @@ cd /data/wxf/mbu0917
 python3 runtime2/run.py
 ```
 
-服务订阅 `/humanoid/programs/control`，支持 `read_files`、`copy`、`codes`、`run`、`debug`、`next` 和 `stop` 命令。它通过以下主题返回结果：
+服务订阅 `/humanoid/programs/control`，支持以下命令：
 
-- `/humanoid/programs/files`：`programs/` 下的 `.py` 文件列表
+- `read_files`：读取用户程序列表。
+- `copy`：将选中程序复制到 `main.py`。
+- `read_file`：读取指定用户程序，供网页修改或下载。
+- `upload`：上传新程序或保存修改后的程序。
+- `delete`：删除指定用户程序。
+- `codes`：读取当前 `main.py`。
+- `run`、`debug`、`next`、`stop`：运行和单步调试控制。
+
+服务通过以下主题返回结果：
+
+- `/humanoid/programs/files`：`runtime2/` 下过滤框架文件后的用户 `.py` 文件列表
 - `/humanoid/programs/codes`：当前 `main.py` 源码
+- `/humanoid/programs/file_content`：`read_file` 返回的文件名和源码
+- `/humanoid/programs/upload_result`：上传或保存结果
+- `/humanoid/programs/delete_result`：删除结果
 - `/humanoid/programs/step`：trace 当前行号和源码
 - `/humanoid/programs/status`：复制、运行、完成、停止或错误状态
 
-`copy` 只接受 `programs/` 目录中的单个 `.py` 文件名，并以原子替换方式覆盖 `runtime2/main.py`。`debug` 只跟踪该 `main.py`，每遇到一行便等待 `next`；`stop` 可结束等待中的调试。
+`copy` 只接受 `runtime2/` 根目录中的用户 `.py` 文件名，不允许绝对路径、
+目录穿越或选择框架文件。网页选中文件并点击“打开”后，服务以原子替换方式
+覆盖 `runtime2/main.py`，并在 `main.py` 第一行写入来源注释，例如：
 
-安全的调试示例位于 `runtime2/programs/debug_demo.py`。网页独立测试页为：
+```python
+# 本文件内容复制自用户程序：demo.py
+```
+
+该注释用于标明 `main.py` 当前内容最初复制自哪个用户程序。`debug` 只跟踪
+`main.py`，每遇到一行便等待 `next`；`stop` 可结束等待中的调试。
+
+网页点击“修改”时先通过 `read_file` 读取源程序；保存后通过 `upload` 原子替换
+源程序。如果修改的是当前已打开的程序，网页会重新执行 `copy`，使
+`main.py` 与保存后的源程序保持一致。上传和删除完成后，服务会自动重新发布
+文件列表。所有文件操作都使用相同的文件名校验规则，不能操作框架文件、绝对
+路径或父目录中的文件。
+
+安全的调试示例位于 `runtime2/debug_demo.py`。网页独立测试页为：
 
 ```text
 http://10.42.1.101:8003/tests/runtime-debug.html
 ```
 
 页面默认使用模拟 MQTT，不会执行程序；添加 `?live=1` 才会连接真实 MQTT。
+
+> 网页中的“程序”模块依赖 `runtime2/run.py` 持续运行。若该进程未启动，
+> 文件弹窗会保持空列表，因为 `/humanoid/programs/control` 请求没有服务端响应。

@@ -77,8 +77,9 @@ python3 -m http.server 8004 -d web
 - 构造函数：`DatabaseController(db_path, joint_controller=None, pose_controller=None, chassis_controller=None)`
 - 核心方法 `init()`：从文件加载到内存 SQLite（`:memory:`），写操作后 `_sync_to_file()` 同步回文件。
 - 数据表：`joints`、`positions`、`map_points`；每类数据实现 增(add)/删(delete)/改(update)/读取所有(get_all)/运动到位置(move)，无查询功能，数据一律按名称字符排序。
+- `joints` 表字段为 `id/type/name/joint_name/value`。类型限定为 `whole_body`（全身22关节）、`left_arm`（左手7关节）、`right_arm`（右手7关节）和 `single_joint`（单轴）；仅单轴变量填写 `joint_name`。
 - 主要方法（以关节为例，位姿/地图点位同构）：
-  - `add_joints(type, name, value)` / `update_joints(type, name, value)` / `delete_joints(type, name)`
+  - `add_joints(type, name, value, joint_name=None)` / `update_joints(type, name, value, joint_name=None)` / `delete_joints(type, name)`
   - `get_joints()` — 读取所有（按名称排序）
   - `move_joints(name)` — 运动到位置（委托关节控制器，禁止自动化测试）
 

@@ -8,6 +8,14 @@ html, body {
     color: #2c3e50;
     font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
 }
+#app,
+#app > div {
+    height: 100%;
+}
+#app > div {
+    display: flex;
+    flex-direction: column;
+}
 
 /* ── 全局细滚动条 ────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -39,12 +47,13 @@ html, body {
     background: #ffffff;
     border-bottom: 2px solid #409eff;
     box-shadow: 0 2px 8px rgba(64, 158, 255, 0.1);
+    flex-shrink: 0;
 }
 .nav-page-title {
-    color: #409eff;
-    font-size: 15px;
-    letter-spacing: 1px;
-    font-weight: 600;
+    color: #1f1f1f;
+    font-size: 18px;
+    letter-spacing: 0;
+    font-weight: 700;
 }
 #toolbar .brand-logo {
     height: 45px;
@@ -60,7 +69,24 @@ html, body {
     margin-left: auto;
     display: flex;
     align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+.nav-breadcrumb {
+    display: flex;
+    align-items: center;
     gap: 8px;
+    white-space: nowrap;
+    color: #1f1f1f;
+    font-family: Arial, "Microsoft YaHei", "PingFang SC", sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+.breadcrumb-separator {
+    color: #1f1f1f;
+    font-size: 18px;
+    font-weight: 700;
 }
 #toolbar .brand-logo img {
     height: 100%;
@@ -72,8 +98,9 @@ html, body {
     align-items: center;
     gap: 8px;
     font-weight: 700;
-    color: #409eff;
-    margin-right: 16px;
+    color: #1f1f1f;
+    margin-right: 0;
+    font-family: Arial, "Microsoft YaHei", "PingFang SC", sans-serif;
     font-size: 18px;
     cursor: pointer;
     user-select: none;
@@ -83,6 +110,16 @@ html, body {
 }
 #toolbar .brand:hover {
     background: #ecf5ff;
+}
+#toolbar .brand,
+.nav-page-title,
+.breadcrumb-separator {
+    color: #1f1f1f;
+    font-family: Arial, "Microsoft YaHei", "PingFang SC", sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0;
 }
 #toolbar button.menu-btn {
     background: #ffffff;
@@ -101,11 +138,76 @@ html, body {
     font-size: 16px;
     line-height: 1;
 }
+button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+.btn-icon {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex: 0 0 16px;
+}
 #toolbar button.menu-btn:hover { background: #ecf5ff; border-color: #409eff; color: #409eff; }
 #toolbar button.menu-btn.active {
     background: #409eff;
     color: #fff;
     border-color: #409eff;
+}
+
+#toolbar .emergency-btn {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 112px;
+    padding: 8px 14px;
+    border: 1px solid #d93025;
+    border-radius: 4px;
+    background: #e53935;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(217, 48, 37, 0.24);
+    transition: background 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+#toolbar .emergency-btn:hover {
+    background: #c62828;
+}
+#toolbar .emergency-btn:active {
+    transform: translateY(1px);
+}
+#toolbar .emergency-btn.pressed {
+    background: #8e0000;
+    border-color: #650000;
+    box-shadow: 0 0 0 3px rgba(229, 57, 53, 0.24);
+}
+#toolbar .emergency-btn:disabled {
+    cursor: wait;
+    opacity: 0.72;
+}
+.emergency-icon {
+    width: 17px;
+    height: 17px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex-shrink: 0;
+}
+
+.ui-icon-sprite {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
 }
 
 /* ── 下拉菜单 ───────────────────────────────────── */
@@ -132,7 +234,9 @@ html, body {
     z-index: 100;
 }
 .dropdown-item {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 9px;
     width: 100%;
     text-align: left;
     background: transparent;
@@ -142,6 +246,16 @@ html, body {
     cursor: pointer;
     font-size: 15px;
     transition: background 0.15s;
+}
+.dropdown-icon {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex-shrink: 0;
 }
 .dropdown-item:hover { background: #ecf5ff; color: #409eff; }
 .dropdown-item.active {
@@ -254,13 +368,31 @@ html, body {
     outline: none;
     border-color: #409eff;
 }
+.save-dialog .form-row select {
+    flex: 1;
+    height: 36px;
+    min-width: 0;
+    background: #fff;
+    color: #606266;
+    border: 1px solid #dcdfe6;
+    border-radius: 4px;
+    padding: 0 10px;
+    font-size: 14px;
+}
+.save-dialog .form-row select:focus {
+    outline: none;
+    border-color: #409eff;
+}
 
 /* ── 内容区 ─────────────────────────────────────── */
 #content {
     position: relative;
     z-index: 5;
     padding: 20px;
-    height: calc(100vh - 50px);
+    flex: 1;
+    min-height: 0;
+    height: auto;
+    box-sizing: border-box;
     overflow-y: auto;
 }
 /* 全屏幕模式（底盘控制等需要撑满的页面） */
@@ -666,7 +798,53 @@ html, body {
 }
 .djc-actions {
     display: flex;
+    align-items: center;
     gap: 8px;
+}
+.djc-speed-control {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-right: 8px;
+    color: #606266;
+    font-size: 13px;
+}
+.djc-speed-label {
+    font-weight: 600;
+    white-space: nowrap;
+}
+.djc-speed-btn {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    background: #fff;
+    color: #409eff;
+    border: 1px solid #409eff;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 17px;
+    line-height: 1;
+}
+.djc-speed-btn:hover {
+    background: #ecf5ff;
+}
+.djc-speed-input {
+    width: 64px;
+    height: 30px;
+    box-sizing: border-box;
+    text-align: center;
+    color: #606266;
+    border: 1px solid #dcdfe6;
+    border-radius: 4px;
+    background: #fff;
+}
+.djc-speed-input:focus {
+    outline: none;
+    border-color: #409eff;
+}
+.djc-speed-unit {
+    color: #909399;
+    white-space: nowrap;
 }
 
 /* ── 确认弹窗 ──────────────────────────────────── */
@@ -1238,7 +1416,15 @@ html, body {
 }
 .tc-actions {
     display: flex;
+    align-items: center;
     gap: 8px;
+}
+.tc-frame-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-left: 12px;
+    border-left: 1px solid #dcdfe6;
 }
 .tc-info {
     display: flex;
@@ -2331,123 +2517,6 @@ hr {
 }
 .mv-table tbody tr:hover {
     background: #f5f7fa;
-}
-
-/* ── YOLO 计算视图 ──────────────────────────────── */
-.yi-panel {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    padding: 0 !important;
-    margin: 0 !important;
-    overflow: hidden;
-    border-radius: 0;
-    border: none;
-    background: #fff;
-}
-.yi-image-area {
-    flex: 1 1 auto;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    padding: 12px;
-    overflow: hidden;
-}
-.yi-image-block {
-    display: flex;
-    flex-direction: column;
-    background: #f5f7fa;
-    border: 2px solid #409eff;
-    border-radius: 6px;
-    padding: 8px;
-    overflow: hidden;
-}
-.yi-image-wrap {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    position: relative;
-}
-.yi-img {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-    border-radius: 4px;
-    border: 1px solid #dcdfe6;
-}
-.yi-image-title {
-    color: #409eff;
-    font-size: 14px;
-    font-weight: 600;
-    text-align: center;
-    margin-bottom: 6px;
-}
-.yi-title-result {
-    color: #e6a23c;
-}
-.yi-placeholder {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #c0c4cc;
-    font-size: 14px;
-    background: #f8fafc;
-    border-radius: 4px;
-    border: 1px dashed #dcdfe6;
-    position: absolute;
-    top: 0; left: 0;
-}
-.yi-bar {
-    flex: 0 0 auto;
-    display: flex;
-    align-items: center;
-    background: #f5f7fa;
-    border-top: 2px solid #409eff;
-    padding: 8px 16px;
-    height: 54px;
-}
-.yi-bar-left {
-    flex: 1 1 0;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-}
-.yi-bar-right {
-    flex: 0 0 auto;
-    display: flex;
-    align-items: center;
-    padding-left: 20px;
-    border-left: 1px solid #dcdfe6;
-    margin-left: 16px;
-}
-.yi-select-group {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-.yi-select-group label {
-    font-size: 13px;
-    color: #606266;
-    white-space: nowrap;
-}
-.yi-select {
-    width: 130px;
-    height: 34px;
-}
-.cv-btn-yolo {
-    background: #e6a23c;
-    border-color: #e6a23c;
-    color: #fff;
-}
-.cv-btn-yolo:hover:not(:disabled) {
-    background: #ebb563;
-    border-color: #ebb563;
-    color: #fff;
 }
 
 /* ── 登录按钮 / 登录弹窗 ──────────────────────── */

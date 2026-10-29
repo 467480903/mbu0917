@@ -48,8 +48,8 @@ export default {
                 </span>
             </div>
             <div class="mv-actions">
-                <button class="mv-btn mv-btn-read" @click="refreshData">刷新</button>
-                <button class="mv-btn mv-btn-edit" :disabled="!canEdit" @click="openEditDialog">修改</button>
+                <button class="mv-btn mv-btn-read" @click="refreshData"><ui-icon name="refresh"></ui-icon>刷新</button>
+                <button class="mv-btn mv-btn-edit" :disabled="!canEdit" @click="openEditDialog"><ui-icon name="edit"></ui-icon>修改</button>
             </div>
         </div>
 
@@ -83,8 +83,8 @@ export default {
                     </div>
                 </div>
                 <div class="step-actions">
-                    <button class="nav-btn" @click="closeEditDialog">取消</button>
-                    <button class="nav-btn" style="background:#e6a23c; color:#fff;" @click="submitEdit">写入</button>
+                    <button class="nav-btn" @click="closeEditDialog"><ui-icon name="x"></ui-icon>取消</button>
+                    <button class="nav-btn" style="background:#e6a23c; color:#fff;" @click="submitEdit"><ui-icon name="edit"></ui-icon>写入</button>
                 </div>
             </div>
         </div>

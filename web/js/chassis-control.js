@@ -18,21 +18,21 @@ export default {
                 <!-- XY 移动: X 前后 / Y 左右 -->
                 <div class="cc-xy-pad">
                     <div class="cc-xy-row">
-                        <button class="cc-dir-btn" @click="moveX(1)">X+ 前</button>
+                        <button class="cc-dir-btn" @click="moveX(1)"><ui-icon name="up"></ui-icon>X+ 前</button>
                     </div>
                     <div class="cc-xy-row">
-                        <button class="cc-dir-btn" @click="moveY(1)">Y+ 左</button>
-                        <button class="cc-dir-btn cc-center" disabled>底盘</button>
-                        <button class="cc-dir-btn" @click="moveY(-1)">Y- 右</button>
+                        <button class="cc-dir-btn" @click="moveY(1)"><ui-icon name="left"></ui-icon>Y+ 左</button>
+                        <button class="cc-dir-btn cc-center" disabled><ui-icon name="home"></ui-icon>底盘</button>
+                        <button class="cc-dir-btn" @click="moveY(-1)"><ui-icon name="right"></ui-icon>Y- 右</button>
                     </div>
                     <div class="cc-xy-row">
-                        <button class="cc-dir-btn" @click="moveX(-1)">X- 后</button>
+                        <button class="cc-dir-btn" @click="moveX(-1)"><ui-icon name="down"></ui-icon>X- 后</button>
                     </div>
                 </div>
                 <!-- 旋转控制 -->
                 <div class="cc-rot-row">
-                    <button class="cc-rot-btn" @click="rotate(1)">↺ 左转</button>
-                    <button class="cc-rot-btn" @click="rotate(-1)">右转 ↻</button>
+                    <button class="cc-rot-btn" @click="rotate(1)"><ui-icon name="rotate-left"></ui-icon>左转</button>
+                    <button class="cc-rot-btn" @click="rotate(-1)"><ui-icon name="rotate-right"></ui-icon>右转</button>
                 </div>
             </div>
         </div>
@@ -44,27 +44,27 @@ export default {
                 <div class="cc-stepper">
                     <label>移动距离</label>
                     <div class="cc-stepper-ctrl">
-                        <button class="cc-step-btn" @click="adjustMoveStep(-10)">−</button>
+                        <button class="cc-step-btn" aria-label="减小移动距离" @click="adjustMoveStep(-10)"><ui-icon name="minus"></ui-icon></button>
                         <input type="number" class="cc-step-input" v-model.number="moveStep" min="1" step="1" />
                         <span class="cc-unit">mm</span>
-                        <button class="cc-step-btn" @click="adjustMoveStep(10)">+</button>
+                        <button class="cc-step-btn" aria-label="增加移动距离" @click="adjustMoveStep(10)"><ui-icon name="plus"></ui-icon></button>
                     </div>
                 </div>
                 <div class="cc-stepper">
                     <label>旋转步长</label>
                     <div class="cc-stepper-ctrl">
-                        <button class="cc-step-btn" @click="adjustRotStep(-0.01)">−</button>
+                        <button class="cc-step-btn" aria-label="减小旋转步长" @click="adjustRotStep(-0.01)"><ui-icon name="minus"></ui-icon></button>
                         <input type="number" class="cc-step-input" v-model.number="rotStep" min="0.01" step="0.01" />
                         <span class="cc-unit">rad</span>
-                        <button class="cc-step-btn" @click="adjustRotStep(0.01)">+</button>
+                        <button class="cc-step-btn" aria-label="增加旋转步长" @click="adjustRotStep(0.01)"><ui-icon name="plus"></ui-icon></button>
                     </div>
                 </div>
                 <div class="cc-stepper">
                     <label>保存点位</label>
                     <div class="cc-stepper-ctrl">
                         <input type="text" class="cc-name-input" v-model="pointName" placeholder="名称" />
-                        <button class="cc-btn cc-btn-save" @click="savePoint">保存</button>
-                        <button class="cc-btn cc-btn-refresh" @click="loadPoints">刷新</button>
+                        <button class="cc-btn cc-btn-save" @click="savePoint"><ui-icon name="save"></ui-icon>保存</button>
+                        <button class="cc-btn cc-btn-refresh" @click="loadPoints"><ui-icon name="refresh"></ui-icon>刷新</button>
                     </div>
                 </div>
                 <div class="cc-stepper cc-map-stepper">
@@ -101,7 +101,7 @@ export default {
                             {{ pt.name }} ({{ pt.source }}) [{{ pt.position[0].toFixed(2) }}, {{ pt.position[1].toFixed(2) }}]
                         </option>
                     </select>
-                    <button class="cc-btn cc-btn-go" @click="gotoPoint" :disabled="!selectedPoint">到位</button>
+                    <button class="cc-btn cc-btn-go" @click="gotoPoint" :disabled="!selectedPoint"><ui-icon name="crosshair"></ui-icon>到位</button>
                 </div>
             </div>
         </div>

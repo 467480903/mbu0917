@@ -151,6 +151,31 @@ class JointController:
 
     def stop_status_publishing(self):
         self._status_stop.set()
+
+    def emergency_stop(self):
+        """读取当前 22 关节位置并立即下发保持指令，打断上肢运动。"""
+        states = self.robot.get_joint_states()
+        if not isinstance(states, dict) or not isinstance(states.get("states"), list):
+            raise RuntimeError("GDK 返回的关节状态格式不正确")
+        current = {}
+        for state in states["states"]:
+            name = state.get("name")
+            value = state.get("position", state.get("motor_position"))
+            if name and value is not None:
+                current[str(name)] = float(value)
+        missing = [name for name in self.whole_body_joint_keys if name not in current]
+        if missing:
+            raise RuntimeError(f"急停时关节状态不完整: {missing}")
+
+        request = self.agibot_gdk.JointControlReq()
+        request.life_time = 0.2
+        request.joint_names = self.whole_body_joint_keys
+        request.joint_positions = [current[name] for name in self.whole_body_joint_keys]
+        # GDK 要求速度为正数；使用很低的速度保持当前位置。
+        request.joint_velocities = [0.05] * len(self.whole_body_joint_keys)
+        self.robot.joint_control_request(request)
+        print("[关节] 急停保持指令已下发（22 关节）")
+        return True
     
     # ── 运动控制（不嵌套，直接调用 GDK）────────────────────
     

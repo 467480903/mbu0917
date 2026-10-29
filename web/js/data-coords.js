@@ -46,10 +46,10 @@ export default {
                 </span>
             </div>
             <div class="djc-actions">
-                <button class="djc-btn djc-btn-read" @click="readData">读取</button>
-                <button class="djc-btn djc-btn-go" :disabled="!selectedItem" @click="confirmGoTo">到位</button>
-                <button class="djc-btn djc-btn-update" :disabled="!selectedItem" @click="confirmUpdate">更新</button>
-                <button class="djc-btn djc-btn-delete" :disabled="!selectedItem" @click="confirmDelete">删除</button>
+                <button class="djc-btn djc-btn-read" @click="readData"><ui-icon name="refresh"></ui-icon>读取</button>
+                <button class="djc-btn djc-btn-go" :disabled="!selectedItem" @click="confirmGoTo"><ui-icon name="crosshair"></ui-icon>到位</button>
+                <button class="djc-btn djc-btn-update" :disabled="!selectedItem" @click="confirmUpdate"><ui-icon name="edit"></ui-icon>更新</button>
+                <button class="djc-btn djc-btn-delete" :disabled="!selectedItem" @click="confirmDelete"><ui-icon name="trash"></ui-icon>删除</button>
             </div>
         </div>
 
@@ -64,8 +64,8 @@ export default {
                     {{ confirmDialog.message }}
                 </div>
                 <div class="djc-dialog-footer">
-                    <button class="djc-btn djc-btn-cancel" @click="cancelConfirm">取消</button>
-                    <button :class="['djc-btn', confirmDialog.confirmClass]" @click="executeConfirm">确定</button>
+                    <button class="djc-btn djc-btn-cancel" @click="cancelConfirm"><ui-icon name="x"></ui-icon>取消</button>
+                    <button :class="['djc-btn', confirmDialog.confirmClass]" @click="executeConfirm"><ui-icon name="check"></ui-icon>确定</button>
                 </div>
             </div>
         </div>

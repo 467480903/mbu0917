@@ -44,6 +44,7 @@ const PROGRAMS_FILE_CONTENT_TOPIC = '/humanoid/programs/file_content';
 const PROGRAMS_UPLOAD_RESULT_TOPIC = '/humanoid/programs/upload_result';
 const PROGRAMS_DELETE_RESULT_TOPIC = '/humanoid/programs/delete_result';
 const MODBUS_DATA_TOPIC = '/humanoid/modbus/data';
+const EMERGENCY_STATUS_TOPIC = '/humanoid/emergency/status';
 
 // 客户端发布主题（客户端发送命令）
 const CAMERA_CTRL_TOPIC = '/humanoid/camera/control';
@@ -56,6 +57,7 @@ const MAP_DB_CTRL_TOPIC = '/humanoid/map/db_control';
 const POSITIONS_CTRL_TOPIC = '/humanoid/positions/control';
 const PROGRAMS_CTRL_TOPIC = '/humanoid/programs/control';
 const MODBUS_CTRL_TOPIC = '/humanoid/modbus/control';
+const EMERGENCY_CTRL_TOPIC = '/humanoid/emergency/control';
 
 class MqttClient {
     constructor() {
@@ -79,6 +81,7 @@ class MqttClient {
         this.mapDbDataCallbacks = [];
         this.positionsDataCallbacks = [];
         this.modbusDataCallbacks = [];
+        this.emergencyStatusCallbacks = [];
     }
 
     connect() {
@@ -133,6 +136,8 @@ class MqttClient {
                     this.positionsDataCallbacks.forEach(cb => cb(data));
                 } else if (message.destinationName === MODBUS_DATA_TOPIC) {
                     this.modbusDataCallbacks.forEach(cb => cb(data));
+                } else if (message.destinationName === EMERGENCY_STATUS_TOPIC) {
+                    this.emergencyStatusCallbacks.forEach(cb => cb(data));
                 }
             } catch (e) {
                 console.error('[MQTT] JSON 解析失败:', e);
@@ -160,6 +165,7 @@ class MqttClient {
                 this.client.subscribe(MAP_DB_DATA_TOPIC, { qos: 0 });
                 this.client.subscribe(POSITIONS_DATA_TOPIC, { qos: 0 });
                 this.client.subscribe(MODBUS_DATA_TOPIC, { qos: 0 });
+                this.client.subscribe(EMERGENCY_STATUS_TOPIC, { qos: 2 });
             },
             onFailure: (err) => {
                 console.error('[MQTT] 连接失败:', err.errorMessage);
@@ -394,6 +400,16 @@ class MqttClient {
         this.modbusDataCallbacks = this.modbusDataCallbacks.filter(cb => cb !== callback);
     }
 
+    addEmergencyStatusCallback(callback) {
+        if (!this.emergencyStatusCallbacks.includes(callback)) {
+            this.emergencyStatusCallbacks.push(callback);
+        }
+    }
+
+    removeEmergencyStatusCallback(callback) {
+        this.emergencyStatusCallbacks = this.emergencyStatusCallbacks.filter(cb => cb !== callback);
+    }
+
     /**
      * 发布命令到指定 topic
      */
@@ -440,7 +456,7 @@ class MqttClient {
     /**
      * 发送相机控制命令（带额外字段）到 /humanoid/camera/control
      * @param {string} command - 命令名
-     * @param {object} extra - 额外字段，如 { cameras: [...] } 或 { yolo: 'wxf.pt' }
+     * @param {object} extra - 额外字段，如 { cameras: [...] }
      */
     publishCameraCommand(command, extra = {}) {
         this.publishToTopic(CAMERA_CTRL_TOPIC, { command, ...extra });
@@ -510,6 +526,14 @@ class MqttClient {
     publishModbusControl(command, data = null) {
         const payload = data !== null ? { command, data } : { command };
         this.publishToTopic(MODBUS_CTRL_TOPIC, payload);
+    }
+
+    /** 按下或松开全局软急停。 */
+    publishEmergency(action) {
+        this.publishToTopic(EMERGENCY_CTRL_TOPIC, {
+            action,
+            time: Date.now(),
+        });
     }
 
     /**

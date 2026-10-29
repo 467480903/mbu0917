@@ -56,6 +56,7 @@ class ChassisController:
         self._status_stop = threading.Event()
         self._status_thread = None
         self._cloud_enabled = threading.Event()
+        self._emergency_pressed = threading.Event()
         self._is_mapping = False
         self._chassis_mode = -1  # -1=未申请, 0=Ackermann, 1=蟹行
         
@@ -464,6 +465,8 @@ class ChassisController:
         # 等待启动
         started = False
         for _ in range(20):
+            if self._emergency_pressed.is_set():
+                return False
             time.sleep(0.5)
             state, _, msg = self._task_state()
             if state == 2:
@@ -482,6 +485,8 @@ class ChassisController:
         
         # 等待完成
         while time.time() - start < timeout:
+            if self._emergency_pressed.is_set():
+                return False
             time.sleep(0.5)
             state, _, msg = self._task_state()
             
@@ -532,6 +537,10 @@ class ChassisController:
         timeout : float
             超时时间（秒）
         """
+        if self._emergency_pressed.is_set():
+            print("[底盘] 急停已按下，拒绝相对运动")
+            return False
+
         # 转换单位：毫米 → 米，度 → 弧度
         dx = x_mm / 1000.0
         dy = y_mm / 1000.0
@@ -632,6 +641,8 @@ class ChassisController:
         print(f"[底盘] 多点运动: {' → '.join(p.get('name', '') for p in points)}")
         
         for i, point in enumerate(points):
+            if self._emergency_pressed.is_set():
+                return False
             name = point.get("name", "")
             # 最后一个点用 normal_navi（高精度）
             if i == len(points) - 1:
@@ -662,6 +673,18 @@ class ChassisController:
         self._stop_chassis()
         self._wait_stop()
         return True
+
+    def set_emergency_stop(self, pressed):
+        """设置软急停状态。按下时立即取消导航并下发零速。"""
+        if pressed:
+            self._emergency_pressed.set()
+            self._cancel_navi()
+            self._stop_chassis()
+            print("[底盘] 急停信号已下发")
+        else:
+            self._emergency_pressed.clear()
+            print("[底盘] 急停状态已松开")
+        return True
     
     def relative2_move(self, x_mm, y_mm, rotate_deg, vel_line=0.25, vel_rotate_deg=10.0, timeout=60.0):
         """相对运动2（带速度参数，使用 move_chassis）
@@ -687,6 +710,10 @@ class ChassisController:
         timeout : float
             超时时间（秒）
         """
+        if self._emergency_pressed.is_set():
+            print("[底盘] 急停已按下，拒绝相对运动")
+            return False
+
         # 转换单位
         dx = x_mm / 1000.0  # 米
         dy = y_mm / 1000.0  # 米
@@ -739,6 +766,8 @@ class ChassisController:
         deadline = time.time() + timeout
         
         while time.time() < deadline:
+            if self._emergency_pressed.is_set():
+                return
             current = self._get_current_pose()
             yaw_diff = self._normalize_angle(target_yaw - current["yaw"])
             
@@ -785,7 +814,7 @@ class ChassisController:
         start_pose = self._get_current_pose()
         
         for duration, speed in segments:
-            if time.time() > deadline:
+            if time.time() > deadline or self._emergency_pressed.is_set():
                 break
             
             vx = dir_x * speed
@@ -795,6 +824,8 @@ class ChassisController:
             
             seg_start = time.time()
             while time.time() - seg_start < duration and time.time() < deadline:
+                if self._emergency_pressed.is_set():
+                    return
                 self.pnc.move_chassis(twist)
                 time.sleep(self.ctrl_dt)
                 

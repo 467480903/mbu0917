@@ -31,28 +31,32 @@ export default {
                 <span v-else class="pv-idle">就绪</span>
             </div>
             <div class="program-actions">
-                <button class="program-btn file-btn" @click="openFileList">文件</button>
+                <button class="program-btn file-btn" @click="openFileList"><ui-icon name="folder"></ui-icon>文件</button>
                 <button
                     class="program-btn run-btn"
                     :class="{ active: running }"
                     @click="runProgram">
+                    <ui-icon name="play"></ui-icon>
                     {{ running ? '运行中...' : '运行' }}
                 </button>
                 <button
                     class="program-btn debug-btn"
                     :class="{ active: debugging }"
                     @click="startDebug">
+                    <ui-icon name="bug"></ui-icon>
                     {{ debugging ? '调试中...' : '单步调试' }}
                 </button>
                 <button
                     class="program-btn next-btn"
                     :disabled="!debugging"
                     @click="nextLine">
+                    <ui-icon name="next"></ui-icon>
                     下一行
                 </button>
                 <button
                     class="program-btn stop-btn"
                     @click="stopProgram">
+                    <ui-icon name="stop"></ui-icon>
                     停止程序
                 </button>
             </div>
@@ -88,21 +92,24 @@ export default {
                 <!-- 底部按钮栏 -->
                 <div class="dialog-btn-bar dialog-btn-bar-noflexwrap">
                     <button class="nav-btn dialog-btn" @click="triggerFileSelect" :disabled="uploading" style="background:#2196F3; color:#fff;">
+                        <ui-icon name="upload"></ui-icon>
                         {{ uploading ? '上传中...' : '上传' }}
                     </button>
                     <button class="nav-btn dialog-btn" @click="openFile" :disabled="!selectedFile" style="background:#4CAF50; color:#fff;">
-                        打开
+                        <ui-icon name="folder-open"></ui-icon>打开
                     </button>
                     <button class="nav-btn dialog-btn" @click="openEditFile" :disabled="!selectedFile || editingFile" style="background:#9C27B0; color:#fff;">
+                        <ui-icon name="edit"></ui-icon>
                         {{ editingFile ? '加载中...' : '修改' }}
                     </button>
                     <button class="nav-btn dialog-btn" @click="downloadFile" :disabled="!selectedFile || downloading" style="background:#FF9800; color:#fff;">
+                        <ui-icon name="download"></ui-icon>
                         {{ downloading ? '下载中...' : '下载' }}
                     </button>
                     <button class="nav-btn dialog-btn" @click="deleteFile" :disabled="!selectedFile || selectedFile === 'main.py'" style="background:#f44336; color:#fff;">
-                        删除
+                        <ui-icon name="trash"></ui-icon>删除
                     </button>
-                    <button class="nav-btn dialog-btn" @click="closeFileList">关闭</button>
+                    <button class="nav-btn dialog-btn" @click="closeFileList"><ui-icon name="x"></ui-icon>关闭</button>
                 </div>
             </div>
         </div>
@@ -120,8 +127,9 @@ export default {
                 ></textarea>
                 <div v-if="editMsg" :style="{color: editMsgColor, fontSize:'13px', marginTop:'8px', minHeight:'18px'}">{{ editMsg }}</div>
                 <div class="dialog-btn-bar dialog-btn-bar-noflexwrap" style="justify-content:flex-end;">
-                    <button class="nav-btn dialog-btn" @click="cancelEdit">取消</button>
+                    <button class="nav-btn dialog-btn" @click="cancelEdit"><ui-icon name="x"></ui-icon>取消</button>
                     <button class="nav-btn dialog-btn" @click="saveEdit" :disabled="editSaving" style="background:#4CAF50; color:#fff;">
+                        <ui-icon name="save"></ui-icon>
                         {{ editSaving ? '保存中...' : '保存' }}
                     </button>
                 </div>
@@ -135,12 +143,12 @@ export default {
                 </h6>
                 <div style="color:#ccc; margin-bottom:20px; line-height:1.6; white-space:pre-line;">{{ confirmDialog.message }}</div>
                 <div class="step-actions">
-                    <button class="nav-btn" @click="cancelConfirm">取消</button>
+                    <button class="nav-btn" @click="cancelConfirm"><ui-icon name="x"></ui-icon>取消</button>
                     <button
                         class="nav-btn"
                         :style="{background: confirmDialog.type === 'run' ? '#4CAF50' : '#FF9800', color:'#fff'}"
                         @click="confirmAction">
-                        确定
+                        <ui-icon name="check"></ui-icon>确定
                     </button>
                 </div>
             </div>
@@ -258,7 +266,10 @@ export default {
                     setTimeout(() => {
                         this.cancelEdit();
                         if (data.filename === this.currentFileName) {
-                            this.readCode();
+                            // 当前显示的是该用户程序复制出的 main.py；保存源文件后
+                            // 重新复制一次，确保主编辑区与最新内容保持一致。
+                            mqttClient.publishRuntimeDebug('copy', data.filename);
+                            setTimeout(() => this.readCode(), 300);
                         }
                         mqttClient.publishProgramControl('read_files');
                     }, 500);

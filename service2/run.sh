@@ -61,6 +61,9 @@ if [ -f "$ENV_FILE" ]; then
 else
     echo "[run.sh] ⚠ 警告: 环境文件不存在: $ENV_FILE"
 fi
+# GDK/Aorta 使用机器人内部固定网络，由 /home/agi/app/env.sh 加载的
+# run.conf 提供 10.42.1.101；外部可变网络绝不能覆盖这些变量。
+echo "[run.sh] GDK internal locator: $LOCATOR_IP"
 export PYTHONPATH="/home/agi/.local/lib/python3.10/site-packages${PYTHONPATH:+:$PYTHONPATH}"
 
 SERVICES=(
@@ -312,6 +315,14 @@ start_service() {
     for attempt in {1..8}; do
         if is_expected_pid "$name" "$pid" && leader_info "$pid"; then
             if [[ "$name" != web_server ]] || port_owned_by_pid 8002 "$pid"; then
+                # GDK 初始化失败通常在进程创建后数秒才退出；主服务需经过
+                # 稳定窗口后再报告成功，避免 systemd 留下虚假的 active 状态。
+                if [[ "$name" == humanoid_server ]]; then
+                    sleep 5
+                    if ! is_expected_pid "$name" "$pid" || ! leader_info "$pid"; then
+                        break
+                    fi
+                fi
                 echo "[run.sh] ✅ $name 已启动 (PID=$pid, SID/PGID=$pid, 日志=$log_file)"
                 return 0
             fi

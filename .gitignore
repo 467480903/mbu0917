@@ -11,3 +11,4 @@ __pycache__/
 images/
 .venv-apriltag/
 .venv-sync/
+service2/logs/

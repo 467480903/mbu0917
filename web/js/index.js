@@ -4,16 +4,16 @@
 import { createApp } from 'vue';
 import { UrdfViewer } from './urdf-viewer.js';
 import { mqttClient } from './mqtt-client.js';
-import TeachJoints     from './teach-joints.js';
-import TeachCoords     from './teach-coords.js?v=20261102-waist-variable';
-import ProgramView     from './program-view.js';
+import TeachJoints     from './teach-joints.js?v=20261108-access';
+import TeachCoords     from './teach-coords.js?v=20261108-access';
+import ProgramView     from './program-view.js?v=20261108-access';
 import MapView         from './map-view.js';
-import CameraView      from './camera-view.js';
-import DataJoints       from './data-joints.js';
-import DataCoords       from './data-coords.js?v=20261102-waist-variable';
-import DataMapPoints    from './data-map-points.js';
+import CameraView      from './camera-view.js?v=20261108-float';
+import DataJoints       from './data-joints.js?v=20261108-access';
+import DataCoords       from './data-coords.js?v=20261108-access';
+import DataMapPoints    from './data-map-points.js?v=20261108-access';
 import SynchroView      from './synchro.js';
-import ChassisControl  from './chassis-control.js?v=20261102-point-direction';
+import ChassisControl  from './chassis-control.js?v=20261108-access';
 
 const UiIcon = {
     props: { name: { type: String, required: true } },
@@ -80,10 +80,12 @@ const App = {
         };
     },
     computed: {
-        // 根据登录状态过滤可见菜单（未登录时隐藏 地图、相机）
+        // 地图、相机公开；只有扫图建图需要管理模式。
         visibleMenus() {
             if (this.isLoggedIn) return this.menus;
-            return this.menus.filter(m => m.id !== 'map' && m.id !== 'camera');
+            return this.menus.map(menu => menu.children
+                ? { ...menu, children: menu.children.filter(child => child.id !== 'map_scan') }
+                : menu);
         },
         // 导航栏右侧显示的层级面包屑
         navBreadcrumb() {
@@ -230,7 +232,7 @@ const App = {
                     <span v-if="batteryCharging" class="battery-charging" title="充电中">⚡</span>
                 </div>
                 <div class="nav-breadcrumb">
-                    <span class="brand" @click="toggleHome">轮式人形机器人</span>
+                    <span class="brand" @click="toggleHome">敏实轮式人行机器人</span>
                     <template v-for="item in navBreadcrumb" :key="item">
                         <span class="breadcrumb-separator">/</span>
                         <span class="nav-page-title">{{ item }}</span>
@@ -264,25 +266,25 @@ const App = {
         </div>
 
         <main id="content" :class="{ 'content-hidden': !currentMenu, 'content-fullscreen': currentMenu === 'map_chassis' || currentMenu === 'cam_capture' || currentMenu === 'data_joints' || currentMenu === 'data_coords' || currentMenu === 'data_map_points' || currentMenu === 'data_modbus' || currentMenu === 'program' || currentMenu === 'teach_joints' || currentMenu === 'teach_coords' }">
-            <teach-joints     v-if="currentMenu === 'teach_joints'"></teach-joints>
-            <teach-coords     v-if="currentMenu === 'teach_coords'"></teach-coords>
-            <program-view     ref="programView" v-if="currentMenu === 'program'"></program-view>
-            <map-view         v-if="currentMenu === 'map_scan'"></map-view>
+            <teach-joints     :can-manage="isLoggedIn" v-if="currentMenu === 'teach_joints'"></teach-joints>
+            <teach-coords     :can-manage="isLoggedIn" v-if="currentMenu === 'teach_coords'"></teach-coords>
+            <program-view     :can-manage="isLoggedIn" ref="programView" v-if="currentMenu === 'program'"></program-view>
+            <map-view         v-if="isLoggedIn && currentMenu === 'map_scan'"></map-view>
 
             <!-- 地图 > 底盘控制 -->
-            <chassis-control  v-if="currentMenu === 'map_chassis'"></chassis-control>
+            <chassis-control  :can-manage="isLoggedIn" v-if="currentMenu === 'map_chassis'"></chassis-control>
 
             <!-- 相机 > 采集 -->
-            <camera-view      v-if="currentMenu === 'cam_capture'"></camera-view>
+            <camera-view      :active="currentMenu === 'cam_capture'"></camera-view>
 
             <!-- 数据 > 关节 -->
-            <data-joints      v-if="currentMenu === 'data_joints'"></data-joints>
+            <data-joints      :can-manage="isLoggedIn" v-if="currentMenu === 'data_joints'"></data-joints>
 
             <!-- 数据 > 坐标 -->
-            <data-coords      v-if="currentMenu === 'data_coords'"></data-coords>
+            <data-coords      :can-manage="isLoggedIn" v-if="currentMenu === 'data_coords'"></data-coords>
 
             <!-- 数据 > 地图点位（只操作 robot_data.db） -->
-            <data-map-points  v-if="currentMenu === 'data_map_points'"></data-map-points>
+            <data-map-points  :can-manage="isLoggedIn" v-if="currentMenu === 'data_map_points'"></data-map-points>
 
             <!-- 数据 > 同步 -->
             <synchro-view      v-if="currentMenu === 'data_modbus'"></synchro-view>
@@ -310,6 +312,7 @@ const App = {
             }
         },
         selectMenu(id) {
+            if (id === 'map_scan' && !this.isLoggedIn) return;
             this.currentMenu = id;
             this.openDropdown = '';
         },
@@ -318,8 +321,8 @@ const App = {
                 // 退出登录
                 this.isLoggedIn = false;
                 // 如果当前处于隐藏菜单页面，回到首页
-                if (this.currentMenu === 'map_scan' || this.currentMenu === 'map_chassis'
-                    || this.currentMenu === 'cam_capture') {
+                this.openDropdown = '';
+                if (this.currentMenu === 'map_scan') {
                     this.currentMenu = '';
                 }
                 console.log('[登录] 已退出管理模式');
@@ -353,7 +356,7 @@ const App = {
             }
         },
         toggleHome() {
-            // 点击「人形底盘机器人」logo，收起所有功能页，显示 3D 模型
+            // 点击「敏实轮式人行机器人」名称，收起所有功能页，显示 3D 模型
             this.currentMenu = '';
             this.openDropdown = '';
         },

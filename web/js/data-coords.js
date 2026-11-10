@@ -6,6 +6,8 @@ import { mqttClient } from './mqtt-client.js';
 
 export default {
     name: 'DataCoords',
+    props: { canManage: { type: Boolean, default: false } },
+    watch: { canManage(allowed) { if (!allowed) this.cancelConfirm(); } },
     inject: ['getRobotStatus'],
     template: `
     <div class="panel djc-panel">
@@ -48,8 +50,8 @@ export default {
             <div class="djc-actions">
                 <button class="djc-btn djc-btn-read" @click="readData"><ui-icon name="refresh"></ui-icon>读取</button>
                 <button class="djc-btn djc-btn-go" :disabled="!selectedItem" @click="confirmGoTo"><ui-icon name="crosshair"></ui-icon>到位</button>
-                <button class="djc-btn djc-btn-update" :disabled="!selectedItem" @click="confirmUpdate"><ui-icon name="edit"></ui-icon>更新</button>
-                <button class="djc-btn djc-btn-delete" :disabled="!selectedItem" @click="confirmDelete"><ui-icon name="trash"></ui-icon>删除</button>
+                <button v-if="canManage" class="djc-btn djc-btn-update" :disabled="!selectedItem" @click="confirmUpdate"><ui-icon name="edit"></ui-icon>更新</button>
+                <button v-if="canManage" class="djc-btn djc-btn-delete" :disabled="!selectedItem" @click="confirmDelete"><ui-icon name="trash"></ui-icon>删除</button>
             </div>
         </div>
 
@@ -200,6 +202,7 @@ export default {
             console.log('[坐标数据] 到位', item.type, item.name);
         },
         confirmUpdate() {
+            if (!this.canManage) return;
             const item = this.selectedItem;
             if (!item) return;
             this.showConfirm(
@@ -212,6 +215,7 @@ export default {
             );
         },
         doUpdate() {
+            if (!this.canManage) return;
             const item = this.selectedItem;
             if (!item) return;
             // 更新：后端读取当前末端位姿并覆盖数据库记录
@@ -223,6 +227,7 @@ export default {
             console.log('[坐标数据] 更新', item.type, item.name);
         },
         confirmDelete() {
+            if (!this.canManage) return;
             const item = this.selectedItem;
             if (!item) return;
             this.showConfirm(
@@ -235,6 +240,7 @@ export default {
             );
         },
         doDelete() {
+            if (!this.canManage) return;
             const item = this.selectedItem;
             if (!item) return;
             mqttClient.publishDataReq('delete', {

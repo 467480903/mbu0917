@@ -5,6 +5,7 @@ import { mqttClient } from './mqtt-client.js';
 
 export default {
     name: 'ProgramView',
+    props: { canManage: { type: Boolean, default: false } },
     inject: ['isLoggedIn'],
     template: `
     <div class="panel pv-panel">
@@ -39,7 +40,7 @@ export default {
                 <span v-else class="pv-idle">就绪</span>
             </div>
             <div class="program-actions">
-                <button class="program-btn file-btn" @click="openFileList"><ui-icon name="folder"></ui-icon>文件</button>
+                <button v-if="canManage" class="program-btn file-btn" @click="openFileList"><ui-icon name="folder"></ui-icon>文件</button>
                 <button
                     class="program-btn run-btn"
                     :class="{ active: running && !breakpointPaused }"
@@ -89,7 +90,7 @@ export default {
         </div>
 
         <!-- 文件列表弹窗 -->
-        <div v-if="showFileList" class="save-overlay" @click.self="closeFileList">
+        <div v-if="canManage && showFileList" class="save-overlay" @click.self="closeFileList">
             <div class="save-dialog save-dialog-files">
                 <h6 class="pv-dialog-title">程序文件</h6>
 
@@ -144,7 +145,7 @@ export default {
         </div>
 
         <!-- 新建文件弹窗 -->
-        <div v-if="showCreateDialog" class="save-overlay" @click.self="closeCreateDialog">
+        <div v-if="canManage && showCreateDialog" class="save-overlay" @click.self="closeCreateDialog">
             <div class="save-dialog save-dialog-create">
                 <h6 class="pv-dialog-title">新建程序文件</h6>
                 <label class="pv-create-label" for="pv-create-name">文件名</label>
@@ -172,7 +173,7 @@ export default {
         </div>
 
         <!-- 代码编辑弹窗 -->
-        <div v-if="showEditDialog" class="save-overlay" @click.self="cancelEdit">
+        <div v-if="canManage && showEditDialog" class="save-overlay" @click.self="cancelEdit">
             <div class="save-dialog save-dialog-edit">
                 <h6 class="pv-dialog-title">修改文件 — {{ editFileName }}</h6>
                 <textarea
@@ -253,6 +254,17 @@ export default {
         }
     },
     watch: {
+        canManage(allowed) {
+            if (allowed) return;
+            this.closeFileList();
+            this.showCreateDialog = false;
+            this.cancelEdit();
+            this._pendingAction = null;
+            if (this.confirmDialog.type === 'delete') {
+                this.cancelConfirm();
+                this.confirmDialog.action = null;
+            }
+        },
         currentLine(newVal) {
             if (newVal > 0) {
                 this.$nextTick(() => {
@@ -283,6 +295,7 @@ export default {
             console.log('[程序] 已更新断点:', breakpoints);
         },
         openFileList() {
+            if (!this.canManage) return;
             mqttClient.publishRuntimeDebug('read_files');
             this.showFileList = true;
             this.selectedFile = '';
@@ -302,9 +315,11 @@ export default {
             }
         },
         triggerFileSelect() {
+            if (!this.canManage) return;
             this.$refs.fileInput.click();
         },
         openCreateDialog() {
+            if (!this.canManage) return;
             this.createFileName = '';
             this.createMsg = '';
             this.creating = false;
@@ -326,6 +341,7 @@ export default {
             this.createMsgColor = isError ? '#00499d' : '#00499d';
         },
         createFile() {
+            if (!this.canManage) return;
             if (this.creating) return;
             let filename = this.createFileName.trim();
             if (!filename) {
@@ -364,6 +380,7 @@ export default {
             console.log('[程序] 已发送新建请求:', filename);
         },
         onFileSelected(event) {
+            if (!this.canManage) return;
             const file = event.target.files[0];
             if (!file) return;
             if (!file.name.endsWith('.py')) {
@@ -382,6 +399,7 @@ export default {
             }, 10000);
             const reader = new FileReader();
             reader.onload = (e) => {
+                if (!this.canManage) { this.uploading = false; return; }
                 const content = e.target.result;
                 mqttClient.publishProgramControl('upload', {
                     filename: file.name,
@@ -425,6 +443,7 @@ export default {
                     this.showEditMsg('保存成功: ' + data.filename);
                     this.showFileMsg('保存成功: ' + data.filename);
                     setTimeout(() => {
+                        if (!this.canManage) return;
                         this.cancelEdit();
                         if (data.filename === this.currentFileName) {
                             // 当前显示的是该用户程序复制出的 main.py；保存源文件后
@@ -450,6 +469,7 @@ export default {
             }
         },
         openFile() {
+            if (!this.canManage) return;
             if (!this.selectedFile) return;
             if (this.running) {
                 this.showFileMsg('程序正在运行，请先停止程序', true);
@@ -462,6 +482,7 @@ export default {
             console.log('[程序] 已请求打开', this.pendingOpenFile);
         },
         downloadFile() {
+            if (!this.canManage) return;
             if (!this.selectedFile) return;
             this.downloading = true;
             this._pendingDownloadFile = this.selectedFile;
@@ -470,6 +491,7 @@ export default {
             console.log('[程序] 请求下载文件:', this.selectedFile);
         },
         openEditFile() {
+            if (!this.canManage) return;
             if (!this.selectedFile) return;
             this.editingFile = true;
             this.editFileName = this.selectedFile;
@@ -480,6 +502,7 @@ export default {
             console.log('[程序] 请求读取文件用于编辑:', this.selectedFile);
         },
         onFileContent(data) {
+            if (!this.canManage) return;
             this.downloading = false;
             this.editingFile = false;
             if (data && data.success && data.code !== undefined) {
@@ -532,6 +555,7 @@ export default {
             }
         },
         saveEdit() {
+            if (!this.canManage) return;
             if (!this.editFileName) return;
             this.editSaving = true;
             this.editMsg = '';
@@ -549,6 +573,7 @@ export default {
             console.log('[程序] 已发送保存请求:', this.editFileName, this.editContent.length, '字符');
         },
         deleteFile() {
+            if (!this.canManage) return;
             if (!this.selectedFile || this.selectedFile === 'main.py') return;
             this.confirmDialog = {
                 visible: true,
@@ -556,6 +581,7 @@ export default {
                 title: '确认删除文件',
                 message: `确定要删除文件「${this.selectedFile}」吗？\n此操作不可撤销。`,
                 action: () => {
+                    if (!this.canManage) return;
                     mqttClient.publishProgramControl('delete', this.selectedFile);
                     console.log('[程序] 已请求删除:', this.selectedFile);
                 }

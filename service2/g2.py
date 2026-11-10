@@ -169,6 +169,7 @@ class ServiceApplication:
         for topic in request_topics:
             client.subscribe(topic, qos=2)
             print(f"[MQTT] 已订阅 {topic}")
+        client.subscribe("/humanoid/camera/+/request", qos=1)
         self._publish_emergency_status()
         self.controllers["sync"].start_polling()
         self._start_status_publishers()
@@ -180,6 +181,11 @@ class ServiceApplication:
                 raise ValueError("报文必须是 JSON 对象")
         except Exception as exc:
             print(f"[MQTT] 无法解析 {message.topic}: {exc}")
+            return
+        parts = message.topic.split("/")
+        if len(parts) == 5 and parts[1:3] == ["humanoid", "camera"] and parts[4] == "request":
+            if not message.retain:
+                self.io_executor.submit(self._handle_camera_channel, parts[3], payload)
             return
         if message.topic == self.legacy_topics["emergency_control"]:
             action = payload.get("action", payload.get("command"))
@@ -432,6 +438,29 @@ class ServiceApplication:
         else:
             raise ValueError(f"未知 TTS 命令: {cmd}")
         self._response("tts", payload, bool(result))
+
+    def _handle_camera_channel(self, camera_name, payload):
+        """新页面单路 MQTT 协议；保留原 camera/request/ 兼容调用。"""
+        if camera_name not in ("kHeadColor", "kHeadDepth", "kHandLeftColor", "kHandRightColor"):
+            return
+        response = {"camera": camera_name, "cmd": payload.get("cmd"), "time": payload.get("time")}
+        try:
+            controller = self.controllers["camera"]
+            if payload.get("cmd") == "capture":
+                filename = controller.capture(camera_name)
+                if not filename:
+                    raise RuntimeError("相机拍照失败")
+                # 识别必须使用本次保存的图片，而不是后来变化的 latest。
+                import base64
+                with open(os.path.join(controller.image_save_dir, filename), "rb") as stream:
+                    encoded = base64.b64encode(stream.read()).decode("ascii")
+                response.update(file=filename, image=encoded)
+            else:
+                response["state"] = controller.channel_control(camera_name, payload.get("cmd"))
+            response["success"] = True
+        except Exception as error:
+            response.update(success=False, error=str(error))
+        self._publish(f"/humanoid/camera/{camera_name}/response", response)
 
     def _handle_camera(self, payload):
         cmd = payload.get("cmd")

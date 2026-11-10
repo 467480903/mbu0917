@@ -12,3 +12,15 @@ images/
 .venv-apriltag/
 .venv-sync/
 service2/logs/
+.venv-*/
+data/llm.secret.json
+data/*.secret.json
+.env
+.env.*
+image/llm/
+.camera1-backup-*/
+.access-backup-*/
+.camera-float-backup-*/
+.joint-refresh-backup-*/
+.name-backup-*/
+service2/logs/

@@ -85,6 +85,7 @@ class MqttClient {
         this.positionsDataCallbacks = [];
         this.modbusDataCallbacks = [];
         this.emergencyStatusCallbacks = [];
+        this.cameraChannelCallbacks = [];
     }
 
     connect() {
@@ -103,6 +104,12 @@ class MqttClient {
         this.client.onMessageArrived = (message) => {
             try {
                 const data = JSON.parse(message.payloadString);
+                if (/^\/humanoid\/camera\/[^/]+\/(frame|response)$/.test(message.destinationName)
+                    || message.destinationName === '/humanoid/apriltag/response/'
+                    || message.destinationName === '/humanoid/vision/llm/result') {
+                    this.cameraChannelCallbacks.forEach(cb => cb(message.destinationName, data));
+                    return;
+                }
 
                 if (message.destinationName === STATUS_TOPIC && this.statusCallback) {
                     this.statusCallback(data);
@@ -172,6 +179,10 @@ class MqttClient {
                 this.client.subscribe(POSITIONS_DATA_TOPIC, { qos: 0 });
                 this.client.subscribe(MODBUS_DATA_TOPIC, { qos: 0 });
                 this.client.subscribe(EMERGENCY_STATUS_TOPIC, { qos: 2 });
+                this.client.subscribe('/humanoid/camera/+/frame', { qos: 0 });
+                this.client.subscribe('/humanoid/camera/+/response', { qos: 1 });
+                this.client.subscribe('/humanoid/apriltag/response/', { qos: 1 });
+                this.client.subscribe('/humanoid/vision/llm/result', { qos: 1 });
             },
             onFailure: (err) => {
                 console.error('[MQTT] 连接失败:', err.errorMessage);
@@ -179,6 +190,14 @@ class MqttClient {
             },
             useSSL: false,
         });
+    }
+
+    addCameraChannelCallback(callback) {
+        this.cameraChannelCallbacks.push(callback);
+    }
+
+    removeCameraChannelCallback(callback) {
+        this.cameraChannelCallbacks = this.cameraChannelCallbacks.filter(cb => cb !== callback);
     }
 
     onStatus(callback) {

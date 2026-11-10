@@ -10,6 +10,10 @@ import { mqttClient } from './mqtt-client.js';
 
 export default {
     name: 'DataMapPoints',
+    props: { canManage: { type: Boolean, default: false } },
+    watch: { canManage(allowed) {
+        if (!allowed) { this.editDialog.visible = false; this.cancelConfirm(); }
+    } },
     inject: ['isLoggedIn'],
     template: `
     <div class="panel djc-panel">
@@ -53,13 +57,13 @@ export default {
                 <button class="djc-btn djc-btn-read" @click="readData"><ui-icon name="refresh"></ui-icon>读取</button>
                 <button class="djc-btn djc-btn-go" :disabled="!selectedItem || gotoBusy"
                         @click="confirmGoTo"><ui-icon name="crosshair"></ui-icon>{{ gotoBusy ? '导航中...' : '到位' }}</button>
-                <button class="djc-btn djc-btn-update" :disabled="!selectedItem" @click="openUpdate"><ui-icon name="edit"></ui-icon>更新</button>
-                <button class="djc-btn djc-btn-delete" :disabled="!selectedItem" @click="confirmDelete"><ui-icon name="trash"></ui-icon>删除</button>
+                <button v-if="canManage" class="djc-btn djc-btn-update" :disabled="!selectedItem" @click="openUpdate"><ui-icon name="edit"></ui-icon>更新</button>
+                <button v-if="canManage" class="djc-btn djc-btn-delete" :disabled="!selectedItem" @click="confirmDelete"><ui-icon name="trash"></ui-icon>删除</button>
             </div>
         </div>
 
         <!-- 更新编辑弹窗 -->
-        <div v-if="editDialog.visible" class="djc-overlay" @click.self="editDialog.visible = false">
+        <div v-if="canManage && editDialog.visible" class="djc-overlay" @click.self="editDialog.visible = false">
             <div class="djc-dialog">
                 <div class="djc-dialog-header">
                     <span class="djc-dialog-icon">✏️</span>
@@ -168,6 +172,7 @@ export default {
 
         // ── 更新 ──────────────────────────────────────
         openUpdate() {
+            if (!this.canManage) return;
             const it = this.selectedItem;
             if (!it) return;
             this.editDialog = {
@@ -179,6 +184,7 @@ export default {
             };
         },
         submitUpdate() {
+            if (!this.canManage) return;
             const d = this.editDialog;
             mqttClient.publishMapDbControl('update', {
                 name: d.name,
@@ -218,6 +224,7 @@ export default {
             );
         },
         confirmDelete() {
+            if (!this.canManage) return;
             const it = this.selectedItem;
             if (!it) return;
             this.showConfirm(
@@ -226,6 +233,7 @@ export default {
                 '🗑️', 'djc-icon-danger', 'djc-btn-delete',
                 () => {
                     // 只按名称删除
+                    if (!this.canManage) return;
                     mqttClient.publishMapDbControl('delete', { name: it.name });
                     console.log('[地图点位] 已提交删除:', it.name);
                     // 删除后延时重新从数据库读取全表并刷新页面

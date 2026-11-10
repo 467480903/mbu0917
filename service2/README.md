@@ -66,10 +66,73 @@ python3 -m http.server 8004 -d web
 | `apriltag_controller.py` | 控制器 | Apriltag 图片识别解析 |
 | `g2.py` | 服务入口 | GDK 控制、状态、相机和数据库 MQTT 服务；不加载 Apriltag |
 | `apriltag.py` | 服务入口 | 使用 `.venv-apriltag` 的独立 Apriltag MQTT 服务 |
-| `run.sh` | 自启动管理 | 启动 g2、Apriltag、runtime 和 web 四个进程 |
+| `run.sh` | 自启动管理 | 启动 g2、Apriltag、LLM、runtime 和 web 五个进程 |
+| `llm.py` | 服务入口 | `.venv-llm` 环境运行的独立硅基流视觉 MQTT 服务，不连接 GDK |
+| `llm_controller.py` | 控制器 | 图片识别、结果校验及横线标注保存 |
 | `README.md` | 文档 | 本说明 |
 
 ## 整体架构
+
+### CAMERA1：单路相机与视觉识别（2026-11-05）
+
+正式页面 `http://<机器人IP>:8002/index.html` → 登录 → 相机 → 采集。
+四张相机卡片各自包含开启、停止、拍摄、连续拍照、悬浮及识别选择。
+开启/停止控制所选相机的数据发布，不关闭 GDK 共享缓存；停止同时结束该相机连拍。
+连拍最短间隔 0.5 秒（受实际帧率影响），照片保存在 `images/`。
+网页连续预览缩放到最长边 640 像素、最高 2 Hz，避免原始大图堵塞 WebSocket 控制回包；拍照和识别仍使用完整分辨率。
+浏览器每 10 秒发送保活；30 秒无保活自动结束该路发布及连拍，防止关网页后持续写盘。
+悬浮画面位于右上角，识别结果位于右下角，切换菜单不会销毁；关闭悬浮窗不等于停止采集。
+
+新协议中 `{camera}` 是 `kHeadColor`、`kHeadDepth`、`kHandLeftColor` 或 `kHandRightColor`：
+
+| Topic | 用途 / 数据 |
+|---|---|
+| `/humanoid/camera/{camera}/request` | `{ "cmd": "start", "time": "唯一请求ID" }`，cmd 还支持 stop、capture、continuous_start、continuous_stop、status、keepalive |
+| `/humanoid/camera/{camera}/response` | 回显 time/camera/cmd/success；控制返回 state；拍照返回 file 和该次照片的 JPEG base64 image |
+| `/humanoid/camera/{camera}/frame` | 所选相机连续画面，camera/image/timestamp，非 retained |
+| `/humanoid/apriltag/request/` | 对本次拍摄 file 发 detect_saved，与独立 Apriltag 服务兼容 |
+| `/humanoid/apriltag/response/` | Apriltag 识别结果；前端在本次原图上描绘角点与 ID |
+| `/humanoid/vision/llm/request` | `{ "cmd": "detect_file", "time": "唯一请求ID", "camera": "kHeadColor", "file": "拍照文件名", "prompt_id": "line" }` |
+| `/humanoid/vision/llm/result` | 回显 time/camera/success，result 包含 points、pixel_points、slope、angle_deg、image、output_file；失败返回 error |
+
+旧全局 camera 主题保留兼容。识别先拍照，再发送该次不可变文件名，不使用会变化的 latest 文件。
+LLM 只允许读取项目 `images/`、`image/` 内的图片，单图最多 12 MB / 2400 万像素；忙时返回错误，不积压云端请求。
+
+#### LLM 配置与运行
+
+```bash
+cd /data/wxf/mbu0917
+python3 -m venv .venv-llm
+.venv-llm/bin/pip install -r service2/requirements-llm.txt
+env -u PYTHONPATH .venv-llm/bin/python service2/llm.py
+# 自启动管理脚本已包含 llm_server，也可只操作该服务：
+sudo bash service2/run.sh start llm_server
+sudo bash service2/run.sh status llm_server
+```
+
+提示词、模型及超时配置在 `data/llm.json`，每次请求重新读取，默认使用
+`Qwen/Qwen3-VL-32B-Thinking`。`line` 用于中下方灰白色线，`fence` 用于附图黑色围栏底杆。
+密钥使用环境变量 `SILICONFLOW_API_KEY` 或 `data/llm.secret.json` 中的 `api_key`，不要写入前端或提交 Git。
+部署的密钥文件权限为 600；`.gitignore` 排除 `.venv-*`、密钥文件和识别输出。
+LLM 会将所选图片上传硅基流，接口固定官方 HTTPS 地址，不允许关闭证书校验。
+若遇证书时间错误，先核对机器人时钟，不要改成不验证 TLS。
+
+#### 非运动验证
+
+```bash
+/data/wxf/mbu0917/.venv-llm/bin/python /data/wxf/mbu0917/test/services2/test_camera1_units.py
+/data/wxf/mbu0917/.venv-llm/bin/python /data/wxf/mbu0917/test/services2/test_camera1_mqtt.py --camera kHeadColor --cmd capture
+/data/wxf/mbu0917/.venv-llm/bin/python /data/wxf/mbu0917/test/services2/test_llm_fence.py
+```
+
+围栏测试默认读取 `image/CAMERA1/1793869745755.png`，输出 JSON 和 `image/llm/line-*.jpg`。
+模型坐标归一化到 0～1000，再转换到原图像素绘制；slope 使用图像坐标（y 向下）。
+注意：当前真实调用测试发现模型能返回 JSON、生成标注图，但围栏端点定位有明显偏差；
+置信度是模型自报值，并非几何精度保证。结果仅供观察，不接入机器人运动控制。
+后续若需要精确斜率，应以专门线段检测算法复核，不直接使用 LLM 坐标。
+
+页面验收应分别检查单路开启/停止、单路拍照/连拍、跨菜单悬浮、两种识别回包及服务离线超时提示。
+禁止为验证这些功能而运行运动程序。
 
 - 每个功能模块都是一个**独立的类**，所有变量与函数都包裹在类中，**没有 `main` 函数、没有 `get_controller`、没有 `handle_request`**。
 - 构造函数**通过参数传入** GDK 对象与 MQTT 客户端对象，避免在模块内自行创建/获取全局依赖。

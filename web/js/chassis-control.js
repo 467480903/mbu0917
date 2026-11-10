@@ -5,6 +5,7 @@ import { mqttClient } from './mqtt-client.js';
 
 export default {
     name: 'ChassisControl',
+    props: { canManage: { type: Boolean, default: false } },
     inject: ['getRobotStatus'],
     template: `
     <div class="panel cc-panel">
@@ -60,10 +61,10 @@ export default {
                     </div>
                 </div>
                 <div class="cc-stepper">
-                    <label>保存点位</label>
+                    <label>{{ canManage ? '保存点位' : '地图点位' }}</label>
                     <div class="cc-stepper-ctrl">
-                        <input type="text" class="cc-name-input" v-model="pointName" placeholder="名称" />
-                        <button class="cc-btn cc-btn-save" @click="savePoint"><ui-icon name="save"></ui-icon>保存</button>
+                        <input v-if="canManage" type="text" class="cc-name-input" v-model="pointName" placeholder="名称" />
+                        <button v-if="canManage" class="cc-btn cc-btn-save" @click="savePoint"><ui-icon name="save"></ui-icon>保存</button>
                         <button class="cc-btn cc-btn-refresh" @click="loadPoints"><ui-icon name="refresh"></ui-icon>刷新</button>
                     </div>
                 </div>
@@ -160,6 +161,7 @@ export default {
             console.log('[底盘] 旋转', rad, 'rad');
         },
         savePoint() {
+            if (!this.canManage) return;
             if (!this.pointName.trim()) {
                 alert('请输入点位名称');
                 return;

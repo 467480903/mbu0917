@@ -1,0 +1,30 @@
+.camera1-panel { height: 100%; overflow: auto; padding: 12px; color: #172333; background: #fff; }
+.camera1-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.camera1-card { border: 1px solid #00499d; border-radius: 6px; min-width: 0; overflow: hidden; }
+.camera1-card header, .camera1-float header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; color: #00499d; background: #f3f7fc; gap: 8px; }
+.camera1-card header span, .camera1-note { font-size: 12px; }
+.camera1-picture { height: clamp(160px, 27vh, 360px); background: #f7f9fc; display: flex; align-items: center; justify-content: center; }
+.camera1-picture img { width: 100%; height: 100%; object-fit: contain; }
+.camera1-tools { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px; border-top: 1px solid #d9e4f2; }
+.camera1-tools button, .camera1-float button, .camera1-tools select { border: 1px solid #00499d; border-radius: 4px; background: #fff; color: #00499d; padding: 6px 9px; font: inherit; font-size: 13px; }
+.camera1-tools button, .camera1-float button { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.camera1-tools button:hover:not(:disabled), .camera1-tools button[aria-pressed="true"], .camera1-float button:hover { background: #00499d; color: #fff; }
+.camera1-tools button:disabled { opacity: .45; cursor: not-allowed; }
+.camera1-analysis { display: inline-flex; }
+.camera1-analysis select { max-width: 155px; border-radius: 4px 0 0 4px; }
+.camera1-analysis button { border-radius: 0 4px 4px 0; border-left: 0; }
+.camera1-message { margin: 0; padding: 0 10px 8px; min-height: 28px; overflow-wrap: anywhere; font-size: 12px; }
+.camera1-note { margin: 8px 0; color: #334a66; }
+.camera1-float { position: fixed; right: 16px; width: min(380px, calc(100vw - 32px)); box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; z-index: 1100; border: 1px solid #00499d; border-radius: 6px; background: #fff; box-shadow: 0 3px 16px #0002; }
+.camera1-live { top: 76px; height: min(340px, calc(100vh - 92px)); }
+.camera1-result { bottom: 74px; height: min(420px, calc(100vh - 150px)); }
+.camera1-float .camera1-drag { flex: 0 0 auto; cursor: move; touch-action: none; user-select: none; }
+.camera1-drag strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.camera1-drag button { flex-shrink: 0; }
+.camera1-float img { display: block; flex: 1 1 0; min-height: 0; width: 100%; object-fit: contain; background: #f7f9fc; }
+.camera1-float .camera1-resize { position: absolute; right: 1px; bottom: 1px; width: 22px; height: 22px; padding: 3px; border: 0; border-radius: 3px; cursor: nwse-resize; touch-action: none; }
+.camera1-resize svg { width: 16px; height: 16px; stroke: currentColor; stroke-width: 1.5; fill: none; pointer-events: none; }
+.camera1-float button:focus-visible { outline: 2px solid #00499d; outline-offset: -3px; }
+.camera1-float p, .camera1-float footer { flex: 0 0 auto; margin: 0; padding: 8px 26px 8px 10px; font-size: 12px; overflow-wrap: anywhere; }
+.camera1-float pre { flex: 0 1 auto; min-height: 0; margin: 0; padding: 8px 26px 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; max-height: 100px; overflow: auto; }
+@media (max-width: 800px) { .camera1-grid { grid-template-columns: 1fr; } }

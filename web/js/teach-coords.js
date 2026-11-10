@@ -7,6 +7,8 @@ import { mqttClient } from './mqtt-client.js';
 
 export default {
     name: 'TeachCoords',
+    props: { canManage: { type: Boolean, default: false } },
+    watch: { canManage(allowed) { if (!allowed) this.showSaveDialog = false; } },
     inject: ['getRobotStatus'],
     template: `
     <div class="panel tc-panel">
@@ -97,7 +99,7 @@ export default {
         <!-- 底部操作栏：按钮组 + 右侧功能描述 -->
         <div class="tc-actionbar">
             <div class="tc-actions">
-                <button class="djc-btn djc-btn-read" @click="showSaveDialog = true">
+                <button v-if="canManage" class="djc-btn djc-btn-read" @click="showSaveDialog = true">
                     <ui-icon name="save"></ui-icon>保存
                 </button>
                 <div class="tc-frame-controls">
@@ -138,7 +140,7 @@ export default {
         </div>
 
         <!-- 保存弹窗 -->
-        <div v-if="showSaveDialog" class="save-overlay" @click.self="showSaveDialog = false">
+        <div v-if="canManage && showSaveDialog" class="save-overlay" @click.self="showSaveDialog = false">
             <div class="save-dialog">
                 <h6 style="color:#00499d; margin-bottom:16px;">保存姿态变量</h6>
 
@@ -278,6 +280,7 @@ export default {
         },
         // 保存末端位姿到服务端
         doSave() {
+            if (!this.canManage) return;
             if (!this.saveName) return;
             const data = this.collectData();
             mqttClient.publishDataSave({

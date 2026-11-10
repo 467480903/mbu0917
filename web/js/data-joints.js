@@ -1,11 +1,13 @@
 // data-joints.js
-// 关节角度轴数据管理页面：读取、到位、更新、删除
+// 关节角度轴数据管理页面：自动加载、到位、更新、删除
 // 只处理 joints 数据，不处理坐标和地图点位
 
 import { mqttClient } from './mqtt-client.js';
 
 export default {
     name: 'DataJoints',
+    props: { canManage: { type: Boolean, default: false } },
+    watch: { canManage(allowed) { if (!allowed) this.cancelConfirm(); } },
     inject: ['getRobotStatus'],
     template: `
     <div class="panel djc-panel">
@@ -33,7 +35,7 @@ export default {
         </div>
 
         <div v-else class="djc-empty">
-            点击右下角「读取」加载关节角度轴数据
+            暂无关节角度轴数据（进入页面时自动加载）
         </div>
 
         <!-- 底部固定操作栏 -->
@@ -57,10 +59,9 @@ export default {
                             @click="adjustSpeed(speedStep)"><ui-icon name="plus"></ui-icon></button>
                     <span class="djc-speed-unit">rad/s</span>
                 </div>
-                <button class="djc-btn djc-btn-read" @click="readData"><ui-icon name="refresh"></ui-icon>读取</button>
                 <button class="djc-btn djc-btn-go" :disabled="!selectedItem" @click="confirmGoTo"><ui-icon name="crosshair"></ui-icon>到位</button>
-                <button class="djc-btn djc-btn-update" :disabled="!selectedItem" @click="confirmUpdate"><ui-icon name="edit"></ui-icon>更新</button>
-                <button class="djc-btn djc-btn-delete" :disabled="!selectedItem" @click="confirmDelete"><ui-icon name="trash"></ui-icon>删除</button>
+                <button v-if="canManage" class="djc-btn djc-btn-update" :disabled="!selectedItem" @click="confirmUpdate"><ui-icon name="edit"></ui-icon>更新</button>
+                <button v-if="canManage" class="djc-btn djc-btn-delete" :disabled="!selectedItem" @click="confirmDelete"><ui-icon name="trash"></ui-icon>删除</button>
             </div>
         </div>
 
@@ -202,6 +203,7 @@ export default {
             console.log('[关节数据] 到位', item.type, item.name, `speed=${this.jointSpeed}`);
         },
         confirmUpdate() {
+            if (!this.canManage) return;
             const item = this.selectedItem;
             if (!item) return;
             this.showConfirm(
@@ -214,6 +216,7 @@ export default {
             );
         },
         doUpdate() {
+            if (!this.canManage) return;
             const item = this.selectedItem;
             if (!item) return;
             const status = this.getRobotStatus();
@@ -247,10 +250,12 @@ export default {
                 joint_name: item.joint_name || null,
                 data: dataToSend
             });
-            item.value = dataToSend;
+            // 后端更新成功后会重新查询数据库并回传完整列表。
+            // 由 onDataResp 统一刷新，不能在收到结果前假定更新已成功。
             console.log('[关节数据] 更新', item.type, item.name, Object.keys(dataToSend).length, '项');
         },
         confirmDelete() {
+            if (!this.canManage) return;
             const item = this.selectedItem;
             if (!item) return;
             this.showConfirm(
@@ -263,6 +268,7 @@ export default {
             );
         },
         doDelete() {
+            if (!this.canManage) return;
             const item = this.selectedItem;
             if (!item) return;
             mqttClient.publishDataReq('delete', {

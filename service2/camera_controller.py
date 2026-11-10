@@ -53,6 +53,12 @@ class CameraController:
         self._stream_enabled = threading.Event()
         self._continuous_enabled = threading.Event()
         self._last_continuous_capture = 0.0
+        self._channel_lock = threading.Lock()
+        self._channels = {
+            key: {"streaming": False, "continuous": False, "expires": 0.0,
+                  "last_capture": 0.0, "last_publish": 0.0, "saved_count": 0, "last_file": None}
+            for key in ("kHeadColor", "kHeadDepth", "kHandLeftColor", "kHandRightColor")
+        }
         
         # JPEG 质量
         self.jpeg_quality = 60
@@ -210,6 +216,62 @@ class CameraController:
         with self._frame_lock:
             return dict(self._latest_frames)
 
+    def channel_control(self, camera_name, command):
+        """每路独立开关；页面每 10 秒续租，失联 30 秒后停止流和连拍。"""
+        if camera_name not in self._channels:
+            raise ValueError("未知相机")
+        with self._channel_lock:
+            channel = self._channels[camera_name]
+            if command == "start":
+                channel["streaming"] = True
+            elif command == "stop":
+                channel["streaming"] = False
+                channel["continuous"] = False
+            elif command == "continuous_start":
+                channel["continuous"] = True
+            elif command == "continuous_stop":
+                channel["continuous"] = False
+            elif command not in ("status", "keepalive"):
+                raise ValueError("未知相机控制命令")
+            if command != "status":
+                channel["expires"] = time.monotonic() + 30
+            return {k: v for k, v in channel.items() if k not in ("expires", "last_capture", "last_publish")}
+
+    def _preview_image(self, encoded):
+        """只压缩网页预览；保存和识别仍使用完整分辨率图片。"""
+        if not HAS_CV2:
+            return encoded
+        photo = cv2.imdecode(np.frombuffer(base64.b64decode(encoded), dtype=np.uint8), cv2.IMREAD_COLOR)
+        if photo is None:
+            raise ValueError("无法解码相机预览")
+        height, width = photo.shape[:2]
+        scale = min(1.0, 640 / max(width, height))
+        if scale < 1:
+            photo = cv2.resize(photo, (round(width * scale), round(height * scale)), interpolation=cv2.INTER_AREA)
+        ok, buffer = cv2.imencode(".jpg", photo, [int(cv2.IMWRITE_JPEG_QUALITY), 55])
+        if not ok:
+            raise ValueError("无法编码相机预览")
+        return base64.b64encode(buffer).decode("ascii")
+
+    def _publish_channels(self, frames):
+        """仅发送开启的单路新帧；连拍只保存对应的相机。"""
+        now = time.monotonic()
+        for camera_name in self._channels:
+            with self._channel_lock:
+                channel = self._channels[camera_name]
+                if now > channel["expires"]:
+                    channel["streaming"] = channel["continuous"] = False
+                encoded = frames.get(camera_name)
+                if encoded and channel["streaming"] and now - channel["last_publish"] >= 0.5:
+                    self.mqtt_client.publish(f"/humanoid/camera/{camera_name}/frame",
+                        json.dumps({"camera": camera_name, "image": self._preview_image(encoded),
+                                    "timestamp": time.time()}), qos=0)
+                    channel["last_publish"] = now
+                if encoded and channel["continuous"] and now - channel["last_capture"] >= 0.5:
+                    channel["last_file"] = self._save_jpeg(camera_name, base64.b64decode(encoded))
+                    channel["saved_count"] += 1
+                    channel["last_capture"] = now
+
     def set_streaming(self, enabled):
         """控制是否将内存中的相机帧发布给旧 web。"""
         if enabled:
@@ -266,6 +328,7 @@ class CameraController:
             frames = {}
             try:
                 frames = self._refresh_frame_cache()
+                self._publish_channels(frames)
                 if self._stream_enabled.is_set():
                     self.publish_cached_frames()
                 if (self._continuous_enabled.is_set()

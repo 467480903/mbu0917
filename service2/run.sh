@@ -25,6 +25,7 @@
 # ─────────────────────────────────────────────────────────
 
 ACTION="${1:-start}"
+TARGET="${2:-}"
 case "$ACTION" in
     start|stop|restart|status) ;;
     *)
@@ -45,6 +46,8 @@ WEB_DIR="$PROJECT_DIR/web"
 WEB_WORK_DIR="/data"
 BACKEND_PATH="$RUN_DIR/g2.py"
 APRILTAG_PATH="$RUN_DIR/apriltag.py"
+LLM_PATH="$RUN_DIR/llm.py"
+LLM_PYTHON="$PROJECT_DIR/.venv-llm/bin/python"
 APRILTAG_PYTHON="$PROJECT_DIR/.venv-apriltag/bin/python"
 APRILTAG_PYTHONPATH="/home/agi/.local/lib/python3.10/site-packages"
 RUNTIME_PATH="$PROJECT_DIR/runtime2/run.py"
@@ -69,9 +72,21 @@ export PYTHONPATH="/home/agi/.local/lib/python3.10/site-packages${PYTHONPATH:+:$
 SERVICES=(
     "humanoid_server|$BACKEND_PATH"
     "apriltag_server|$APRILTAG_PATH"
+    "llm_server|$LLM_PATH"
     "runtime_server|$RUNTIME_PATH"
     "web_server|CMD:python3 -m http.server 8002 --directory $WEB_DIR|$WEB_WORK_DIR"
 )
+if [[ -n "$TARGET" ]]; then
+    selected=()
+    for svc in "${SERVICES[@]}"; do
+        [[ "${svc%%|*}" == "$TARGET" ]] && selected+=("$svc")
+    done
+    if ((${#selected[@]} != 1)); then
+        echo "[run.sh] 未知服务: $TARGET" >&2
+        exit 1
+    fi
+    SERVICES=("${selected[@]}")
+fi
 LOG_DIR="$RUN_DIR/logs"
 mkdir -p "$LOG_DIR"
 
@@ -129,6 +144,15 @@ is_runtime_pid() {
     [[ "$cwd" == "$RUNTIME_WORK_DIR" ]]
 }
 
+is_llm_pid() {
+    local pid="$1"
+    local -a argv=()
+    process_alive "$pid" || return 1
+    mapfile -d '' -t argv < "/proc/$pid/cmdline" 2>/dev/null || return 1
+    ((${#argv[@]} == 2)) || return 1
+    [[ "${argv[0]}" == "$LLM_PYTHON" && "${argv[1]}" == "$LLM_PATH" ]]
+}
+
 is_web_pid() {
     local pid="$1" cwd
     local -a argv=()
@@ -147,6 +171,7 @@ is_expected_pid() {
     case "$name" in
         humanoid_server) is_backend_pid "$pid" ;;
         apriltag_server) is_apriltag_pid "$pid" ;;
+        llm_server) is_llm_pid "$pid" ;;
         runtime_server) is_runtime_pid "$pid" ;;
         web_server) is_web_pid "$pid" ;;
         *) return 1 ;;
@@ -282,6 +307,10 @@ start_service() {
         fi
         (cd "$RUN_DIR" && exec nohup setsid env PYTHONPATH="$APRILTAG_PYTHONPATH" \
             "$APRILTAG_PYTHON" "$APRILTAG_PATH" </dev/null >"$log_file" 2>&1) &
+    elif [[ "$name" == llm_server ]]; then
+        [[ -x "$LLM_PYTHON" && -f "$LLM_PATH" ]] || return 1
+        (cd "$RUN_DIR" && exec nohup setsid env -u PYTHONPATH PYTHONUNBUFFERED=1 \
+            "$LLM_PYTHON" "$LLM_PATH" </dev/null >"$log_file" 2>&1) &
     elif [[ "$name" == runtime_server ]]; then
         if [ ! -f "$RUNTIME_PATH" ]; then
             echo "[run.sh] ❌ 文件不存在: $RUNTIME_PATH" >&2
@@ -435,8 +464,8 @@ case "$ACTION" in
         status_port 9001 "MQTT WebSocket"
         ;;
     restart)
-        "$0" stop || exit 1
+        "$0" stop "$TARGET" || exit 1
         sleep 2
-        exec "$0" start
+        exec "$0" start "$TARGET"
         ;;
 esac

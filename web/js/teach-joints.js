@@ -5,6 +5,8 @@ import { mqttClient } from './mqtt-client.js';
 
 export default {
     name: 'TeachJoints',
+    props: { canManage: { type: Boolean, default: false } },
+    watch: { canManage(allowed) { if (!allowed) this.showSaveDialog = false; } },
     inject: ['getUrdfViewer', 'getRobotStatus'],
     template: `
     <div class="panel tj-panel">
@@ -70,7 +72,7 @@ export default {
         <!-- 底部操作栏：按钮组 + 右侧功能描述 -->
         <div class="tj-actionbar">
             <div class="tj-actions">
-                <button class="djc-btn djc-btn-read" @click="showSaveDialog = true">
+                <button v-if="canManage" class="djc-btn djc-btn-read" @click="showSaveDialog = true">
                     <ui-icon name="save"></ui-icon>保存
                 </button>
             </div>
@@ -88,7 +90,7 @@ export default {
         </div>
 
         <!-- 保存弹窗 -->
-        <div v-if="showSaveDialog" class="save-overlay" @click.self="showSaveDialog = false">
+        <div v-if="canManage && showSaveDialog" class="save-overlay" @click.self="showSaveDialog = false">
             <div class="save-dialog">
                 <h6 style="color:#00499d; margin-bottom:16px;">保存关节角</h6>
 
@@ -230,6 +232,7 @@ export default {
             });
         },
         doSave() {
+            if (!this.canManage) return;
             if (!this.saveName) return;
             const typeGroups = {
                 whole_body: [this.headJoints, this.leftArmJoints, this.rightArmJoints, this.waistJoints, this.legJoints],

@@ -98,7 +98,7 @@ export default {
                 <div class="cc-goto-row">
                     <select class="cc-select" v-model="selectedPoint">
                         <option value="">-- 选择点位 --</option>
-                        <option v-for="pt in mapPoints" :key="pt.name" :value="pt.name">
+                        <option v-for="pt in mapPoints" :key="pointKey(pt)" :value="pointKey(pt)">
                             {{ pt.name }} ({{ pt.source }}) [{{ pt.position[0].toFixed(2) }}, {{ pt.position[1].toFixed(2) }}]
                         </option>
                     </select>
@@ -184,15 +184,21 @@ export default {
                 mqttClient.publishMapControl('load_grid', { map_id: this.selectedMapId });
             }, 1000);
         },
+        pointKey(pt) {
+            return JSON.stringify([pt.source, pt.name]);
+        },
         gotoPoint() {
             if (!this.selectedPoint) return;
-            const pt = this.mapPoints.find(p => p.name === this.selectedPoint);
+            const pt = this.mapPoints.find(p => this.pointKey(p) === this.selectedPoint);
             if (!pt) return;
-            // 点位名称由地图服务原样返回。即使名称是 "1"、"2"、"3"，
-            // 也必须按字符串发送；服务端会优先按 name 精确查找。
-            // 不能转换成从 0 开始的数组索引，否则选择 2 会错误导航到点位 1。
-            mqttClient.publishCommand('go', pt.name);
-            console.log('[底盘] 到位', this.selectedPoint);
+            // 原生地图点按名称导航；数据库点复用地图数据页的坐标导航接口。
+            // 保留数字名称为字符串，不能转换成数组索引。
+            if (pt.source === 'map') {
+                mqttClient.publishCommand('go', pt.name);
+            } else {
+                mqttClient.publishMapDbControl('goto', { name: pt.name, source: pt.source });
+            }
+            console.log('[底盘] 到位', pt.name, pt.source);
         },
         onMapPoints(data) {
             if (data && data.command === 'map_points' && Array.isArray(data.data)) {

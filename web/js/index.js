@@ -13,7 +13,7 @@ import DataJoints       from './data-joints.js?v=20261108-access';
 import DataCoords       from './data-coords.js?v=20261108-access';
 import DataMapPoints    from './data-map-points.js?v=20261108-access';
 import SynchroView      from './synchro.js';
-import ChassisControl  from './chassis-control.js?v=20261108-access';
+import ChassisControl  from './chassis-control.js?v=20261113-point-source';
 
 const UiIcon = {
     props: { name: { type: String, required: true } },
@@ -232,7 +232,7 @@ const App = {
                     <span v-if="batteryCharging" class="battery-charging" title="充电中">⚡</span>
                 </div>
                 <div class="nav-breadcrumb">
-                    <span class="brand" @click="toggleHome">敏实轮式人行机器人</span>
+                    <span class="brand" @click="toggleHome">敏实轮式人行机器人上位机软件</span>
                     <template v-for="item in navBreadcrumb" :key="item">
                         <span class="breadcrumb-separator">/</span>
                         <span class="nav-page-title">{{ item }}</span>
@@ -356,7 +356,7 @@ const App = {
             }
         },
         toggleHome() {
-            // 点击「敏实轮式人行机器人」名称，收起所有功能页，显示 3D 模型
+            // 点击「敏实轮式人行机器人上位机软件」名称，收起所有功能页，显示 3D 模型
             this.currentMenu = '';
             this.openDropdown = '';
         },

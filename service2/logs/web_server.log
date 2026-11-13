@@ -1,0 +1,128 @@
+10.20.15.120 - - [13/Nov/2026 09:17:34] "GET / HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:17:34] "GET /bootstrap.min.css HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:17:34] "GET /css/camera1.css?v=20261108-float HTTP/1.1" 304 -
+10.20.15.120 - - [13/Nov/2026 09:17:35] "GET /js/index.js?v=20261111-minth-software HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:17:35] "GET /libs/vue.esm-browser.prod.js HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:17:35] "GET /js/mqtt-client.js HTTP/1.1" 304 -
+10.20.15.120 - - [13/Nov/2026 09:17:35] "GET /js/teach-joints.js?v=20261108-access HTTP/1.1" 304 -
+10.20.15.120 - - [13/Nov/2026 09:17:35] "GET /js/program-view.js?v=20261108-access HTTP/1.1" 304 -
+10.20.15.120 - - [13/Nov/2026 09:17:35] "GET /js/teach-coords.js?v=20261108-access HTTP/1.1" 304 -
+10.20.15.120 - - [13/Nov/2026 09:17:35] "GET /js/camera-view.js?v=20261108-float HTTP/1.1" 304 -
+10.20.15.120 - - [13/Nov/2026 09:17:35] "GET /js/data-joints.js?v=20261108-access HTTP/1.1" 304 -
+10.20.15.120 - - [13/Nov/2026 09:17:35] "GET /js/data-coords.js?v=20261108-access HTTP/1.1" 304 -
+10.20.15.120 - - [13/Nov/2026 09:17:35] "GET /js/data-map-points.js?v=20261108-access HTTP/1.1" 304 -
+10.20.15.120 - - [13/Nov/2026 09:17:35] "GET /js/chassis-control.js?v=20261108-access HTTP/1.1" 304 -
+10.20.15.120 - - [13/Nov/2026 09:17:35] "GET /libs/three.module.js HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:17:36] "GET /meshes/G2/T2/body_link2.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:17:36] "GET /meshes/G2/T2/body_link3.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:17:36] "GET /meshes/G2/T2/base_link.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:17:36] "GET /meshes/G2/T2/body_link1.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:17:36] "GET /meshes/G2/T2/body_link5.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:17:36] "GET /meshes/G2/T2/body_link4.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:17:39] "GET /meshes/G2/T2/chassis_lwheel_front_link1.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:17:39] "GET /meshes/G2/T2/chassis_lwheel_front_link2.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:17:39] "GET /meshes/G2/T2/chassis_rwheel_front_link1.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:17:40] "GET /meshes/G2/T2/chassis_rwheel_front_link2.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:17:42] "GET /meshes/G2/T2/chassis_rwheel_rear_link1.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:17:43] "GET /meshes/G2/T2/chassis_rwheel_rear_link2.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:18:02] "GET / HTTP/1.1" 304 -
+10.20.15.120 - - [13/Nov/2026 09:18:02] "GET /meshes/G2/T2/chassis_lwheel_rear_link1.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:18:02] "GET /meshes/G2/T2/chassis_lwheel_rear_link2.STL HTTP/1.1" 200 -
+----------------------------------------
+Exception occurred during processing of request from ('10.20.15.120', 55892)
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/socketserver.py", line 683, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.10/http/server.py", line 1304, in finish_request
+    self.RequestHandlerClass(request, client_address, self,
+  File "/usr/lib/python3.10/http/server.py", line 668, in __init__
+    super().__init__(*args, **kwargs)
+  File "/usr/lib/python3.10/socketserver.py", line 747, in __init__
+    self.handle()
+  File "/usr/lib/python3.10/http/server.py", line 433, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.10/http/server.py", line 421, in handle_one_request
+    method()
+  File "/usr/lib/python3.10/http/server.py", line 675, in do_GET
+    self.copyfile(f, self.wfile)
+  File "/usr/lib/python3.10/http/server.py", line 875, in copyfile
+    shutil.copyfileobj(source, outputfile)
+  File "/usr/lib/python3.10/shutil.py", line 198, in copyfileobj
+    fdst_write(buf)
+  File "/usr/lib/python3.10/socketserver.py", line 826, in write
+    self._sock.sendall(b)
+BrokenPipeError: [Errno 32] Broken pipe
+----------------------------------------
+10.20.15.120 - - [13/Nov/2026 09:18:03] "GET /meshes/G2/T2/chassis_lwheel_front_link2.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:18:03] "GET /meshes/G2/T2/chassis_lwheel_rear_link1.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:18:03] code 404, message File not found
+10.20.15.120 - - [13/Nov/2026 09:18:03] "GET /favicon.ico HTTP/1.1" 404 -
+10.20.15.120 - - [13/Nov/2026 09:18:03] "GET /meshes/G2/T2/chassis_rwheel_rear_link2.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:18:03] "GET /meshes/G2/T2/chassis_lwheel_rear_link2.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:18:04] "GET /meshes/G2/T2/head_link2.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:18:04] "GET /meshes/G2/T2/head_link3.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:18:06] "GET /meshes/arm/Link1_P6.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:18:12] "GET /meshes/arm/Link2_P6.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:18:13] "GET /meshes/arm/Link3_P6.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:18:22] "GET /meshes/arm/Link4_P6.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:18:27] "GET /meshes/arm/Link5_P6.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:18:27] "GET /meshes/arm/Link6_P6.STL HTTP/1.1" 200 -
+10.20.15.120 - - [13/Nov/2026 09:18:27] "GET /meshes/arm/Link7_P6.STL HTTP/1.1" 200 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET / HTTP/1.1" 200 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /bootstrap.min.css HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /css/vue_app.css?v=20261102-waist2 HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /paho-mqtt.min.js HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /css/camera1.css?v=20261108-float HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /js/index.js?v=20261111-minth-software HTTP/1.1" 200 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /libs/vue.esm-browser.prod.js HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /js/urdf-viewer.js HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /js/mqtt-client.js HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /js/teach-joints.js?v=20261108-access HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /js/program-view.js?v=20261108-access HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /js/teach-coords.js?v=20261108-access HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /js/map-view.js HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /js/data-map-points.js?v=20261108-access HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /js/camera-view.js?v=20261108-float HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /js/data-coords.js?v=20261108-access HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /js/synchro.js HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /js/data-joints.js?v=20261108-access HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /js/chassis-control.js?v=20261108-access HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /libs/three_addons/controls/OrbitControls.js HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /libs/three_addons/loaders/STLLoader.js HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /libs/three.module.js HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /libs/urdf-loader.js HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /libs/three_addons/loaders/ColladaLoader.js HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /libs/URDFClasses.js HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /libs/three_addons/loaders/TGALoader.js HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /meshes/model.urdf HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /minth-logo.png HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /meshes/G2/T2/body_link1.STL HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /meshes/G2/T2/base_link.STL HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /meshes/G2/T2/body_link2.STL HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /meshes/G2/T2/body_link3.STL HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /meshes/G2/T2/body_link4.STL HTTP/1.1" 304 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /meshes/G2/T2/body_link5.STL HTTP/1.1" 200 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /meshes/G2/T2/chassis_lwheel_front_link1.STL HTTP/1.1" 200 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /meshes/G2/T2/chassis_lwheel_front_link2.STL HTTP/1.1" 200 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /meshes/G2/T2/chassis_rwheel_front_link1.STL HTTP/1.1" 200 -
+10.20.17.208 - - [13/Nov/2026 09:22:44] "GET /meshes/G2/T2/chassis_rwheel_front_link2.STL HTTP/1.1" 200 -
+10.20.17.208 - - [13/Nov/2026 09:22:46] "GET /meshes/G2/T2/chassis_rwheel_rear_link1.STL HTTP/1.1" 200 -
+10.20.17.208 - - [13/Nov/2026 09:22:50] "GET /meshes/G2/T2/chassis_rwheel_rear_link2.STL HTTP/1.1" 200 -
+10.20.17.208 - - [13/Nov/2026 09:22:50] "GET /meshes/G2/T2/chassis_lwheel_rear_link1.STL HTTP/1.1" 200 -
+10.20.17.208 - - [13/Nov/2026 09:22:51] "GET /meshes/G2/T2/chassis_lwheel_rear_link2.STL HTTP/1.1" 200 -
+10.20.17.208 - - [13/Nov/2026 09:22:51] "GET /meshes/G2/T2/head_link1.STL HTTP/1.1" 200 -
+10.20.17.208 - - [13/Nov/2026 09:22:56] "GET /meshes/G2/T2/head_link2.STL HTTP/1.1" 200 -
+10.20.17.208 - - [13/Nov/2026 09:22:57] "GET /meshes/G2/T2/head_link3.STL HTTP/1.1" 200 -
+10.20.17.208 - - [13/Nov/2026 09:23:04] "GET /meshes/arm/Link1_P6.STL HTTP/1.1" 200 -
+10.20.17.208 - - [13/Nov/2026 09:23:06] "GET /meshes/arm/Link2_P6.STL HTTP/1.1" 200 -
+10.20.17.208 - - [13/Nov/2026 09:23:08] "GET /meshes/arm/Link4_P6.STL HTTP/1.1" 200 -
+10.20.17.208 - - [13/Nov/2026 09:23:08] "GET /meshes/arm/Link3_P6.STL HTTP/1.1" 200 -
+10.20.17.208 - - [13/Nov/2026 09:23:15] "GET /meshes/arm/Link5_P6.STL HTTP/1.1" 200 -
+10.20.17.208 - - [13/Nov/2026 09:23:32] "GET /meshes/arm/Link6_P6.STL HTTP/1.1" 200 -
+10.20.17.208 - - [13/Nov/2026 09:23:33] "GET /meshes/arm/Link7_P6.STL HTTP/1.1" 200 -
+10.20.17.208 - - [13/Nov/2026 09:23:34] code 404, message File not found
+10.20.17.208 - - [13/Nov/2026 09:23:34] "GET /favicon.ico HTTP/1.1" 404 -
+10.20.17.208 - - [13/Nov/2026 09:36:31] "GET / HTTP/1.1" 304 -
+10.20.15.120 - - [13/Nov/2026 09:39:47] "GET / HTTP/1.1" 304 -
+127.0.0.1 - - [13/Nov/2026 09:50:58] "GET /js/chassis-control.js?v=20261113-point-source HTTP/1.1" 200 -
+127.0.0.1 - - [13/Nov/2026 09:50:58] "GET /index.html HTTP/1.1" 200 -
